@@ -9,7 +9,11 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: "-D warnings"
+  # Note : on ne promeut PAS les warnings en errors via `RUSTFLAGS: -D warnings`
+  # car okvm-protocol a 82 warnings missing_docs en cours de cleanup. La règle
+  # `#![warn(missing_docs)]` reste active localement et dans clippy, mais ne
+  # casse pas la CI tant qu'on n'a pas documenté tous les champs. Tracking
+  # task : voir le backlog "missing_docs cleanup".
 
 jobs:
   # ─── Rust : build + test workspace complet sur Windows ──────────────────

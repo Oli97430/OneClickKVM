@@ -1,11 +1,13 @@
-# Dependabot config — vérifie hebdomadairement les MAJ de dépendances
-# (Cargo workspace, npm app frontend, GitHub Actions) et ouvre des PRs.
+# Dependabot config — vérifie hebdomadairement les MAJ de dépendances.
 #
-# Cible : groupes pour réduire le nombre de PRs, focus sur sécurité.
+# **Politique** : patch + minor seulement, on **ignore les majors** pour
+# l'alpha (les bumps majors openh264 0.8→0.9, vite 6→8, typescript 5→6 cassent
+# souvent l'API et méritent un effort manuel + tests E2E). Levez l'ignore-list
+# au cas par cas quand vous êtes prêt à investiguer un major.
 
 version: 2
 updates:
-  # === Rust workspace (Cargo.toml + tous les crates) ===
+  # === Rust workspace ===
   - package-ecosystem: cargo
     directory: /
     schedule:
@@ -13,10 +15,12 @@ updates:
       day: monday
       time: "06:00"
       timezone: Europe/Paris
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 3
     labels: ["dependencies", "rust"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
-      # Crates de cryptographie : MAJ ensemble pour cohérence
       crypto:
         patterns:
           - "aes-gcm"
@@ -30,30 +34,31 @@ updates:
           - "getrandom"
           - "zeroize"
           - "subtle"
-      # Async runtime
       tokio:
         patterns:
           - "tokio*"
           - "futures*"
           - "async-trait"
-      # windows-rs (souvent breaking au cross-version)
       windows:
         patterns:
           - "windows"
           - "windows-*"
-      # Tauri (groupé pour éviter de mélanger versions tauri / tauri-build)
-      tauri:
-        patterns:
-          - "tauri*"
 
-  # === Cargo de l'app shell (sépare du workspace via `[workspace] exclude`) ===
+  # === Cargo de l'app shell (séparé du workspace) ===
   - package-ecosystem: cargo
     directory: /app/src-tauri
     schedule:
       interval: weekly
       day: monday
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 2
     labels: ["dependencies", "tauri"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      tauri:
+        patterns:
+          - "tauri*"
 
   # === Frontend npm/pnpm ===
   - package-ecosystem: npm
@@ -61,8 +66,11 @@ updates:
     schedule:
       interval: weekly
       day: monday
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 2
     labels: ["dependencies", "frontend"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       svelte:
         patterns:
@@ -73,9 +81,13 @@ updates:
           - "vite"
           - "@vitejs/*"
 
-  # === GitHub Actions (workflows .github/workflows/) ===
+  # === GitHub Actions ===
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    open-pull-requests-limit: 3
     labels: ["dependencies", "ci"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
