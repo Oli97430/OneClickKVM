@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+
+jobs:
+  # ─── Rust : build + test workspace complet sur Windows ──────────────────
+  rust-test:
+    name: Rust (cargo test)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (MSVC stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+          components: clippy, rustfmt
+
+      - name: Cache cargo registry + target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+        continue-on-error: true # info-only au début, à durcir plus tard
+
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+        continue-on-error: true # info-only au début, à durcir plus tard
+
+      - name: cargo test --workspace
+        run: cargo test --workspace --no-fail-fast
+
+  # ─── Frontend : svelte-check ─────────────────────────────────────────────
+  frontend-check:
+    name: Frontend (svelte-check)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: pnpm install
+        run: pnpm install --frozen-lockfile
+
+      - name: svelte-check
+        run: pnpm exec svelte-check --tsconfig ./tsconfig.json --fail-on-warnings

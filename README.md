@@ -1,5 +1,11 @@
 # OneClick KVM
 
+[![CI](https://github.com/Oli97430/OneClickKVM/actions/workflows/ci.yml/badge.svg)](https://github.com/Oli97430/OneClickKVM/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Oli97430/OneClickKVM?include_prereleases)](https://github.com/Oli97430/OneClickKVM/releases/latest)
+[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#licence)
+[![Rust](https://img.shields.io/badge/rust-1.80%2B-orange?logo=rust)](https://rustup.rs)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-blue?logo=windows)](https://github.com/Oli97430/OneClickKVM/releases)
+
 > Contrôle multi-PC chiffré pour Windows — partage clavier, souris, presse-papier,
 > fichiers, audio et écran entre plusieurs ordinateurs sur le réseau local.
 

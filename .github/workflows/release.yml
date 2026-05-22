@@ -1,0 +1,118 @@
+name: Release
+
+# Déclenché quand on pousse un tag `vX.Y.Z` (ex: `git push origin v0.2.0`).
+# Build l'installeur NSIS, calcule SHA-256, et attache les deux à la release
+# GitHub correspondante (créée à l'avance via `gh release create` ou ce workflow
+# la créera si elle n'existe pas encore).
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag à builder (ex: v0.2.0)"
+        required: true
+        type: string
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-windows:
+    name: Build Windows installer
+    runs-on: windows-latest
+    permissions:
+      contents: write # nécessaire pour attacher des assets à la release
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect tag
+        id: tag
+        shell: pwsh
+        run: |
+          $tag = if ($env:GITHUB_REF -like 'refs/tags/*') {
+            $env:GITHUB_REF -replace '^refs/tags/', ''
+          } else {
+            '${{ inputs.tag }}'
+          }
+          $version = $tag -replace '^v', ''
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Tag : $tag"
+          Write-Host "Version : $version"
+
+      - name: Install Rust toolchain (MSVC stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache cargo registry + target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: release-${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: pnpm install
+        working-directory: app
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Tauri bundle (NSIS)
+        working-directory: app
+        run: pnpm tauri build
+
+      - name: Locate installer
+        id: locate
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem `
+            -Path "app/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/" `
+            -Filter "OneClick KVM_*_x64-setup.exe" `
+            | Select-Object -First 1
+          if (-not $installer) {
+            throw "Installeur introuvable dans bundle/nsis/"
+          }
+          $path = $installer.FullName
+          $size = [math]::Round($installer.Length / 1MB, 2)
+          $sha = (Get-FileHash -Algorithm SHA256 -Path $path).Hash.ToLower()
+          Write-Host "Installer : $path"
+          Write-Host "Size      : $size MB"
+          Write-Host "SHA-256   : $sha"
+          "installer_path=$path" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "sha256=$sha" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          # Génère le fichier sha256.txt à attacher.
+          "$sha  $($installer.Name)" | Out-File -FilePath "sha256.txt" -Encoding utf8
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: OneClick KVM ${{ steps.tag.outputs.version }}
+          body: |
+            Build automatique GitHub Actions à partir du tag `${{ steps.tag.outputs.tag }}`.
+
+            **SHA-256** : `${{ steps.locate.outputs.sha256 }}`
+
+            Voir [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)
+            pour les changements détaillés.
+          files: |
+            ${{ steps.locate.outputs.installer_path }}
+            sha256.txt
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: true
