@@ -19,7 +19,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::time::timeout;
 
 use okvm_core::{Capabilities, DeviceId, IdentityKeypair};
-use okvm_crypto::{AeadSession, HandshakeError, HandshakeState};
+use okvm_crypto::{aead::AeadKey, AeadSession, HandshakeError, HandshakeState};
 use okvm_protocol::{
     handshake_msg::{ClientFinished, ClientHello, ServerFinished, ServerHello, HANDSHAKE_MAGIC},
     messages::{ChannelDesc, RejectReason},
@@ -63,11 +63,12 @@ pub enum DriverError {
 /// - le hash du transcript final (utile pour pinning / debug) ;
 /// - l'identite et les capabilities du pair distant ;
 /// - la liste des canaux negocies ;
-/// - les ports UDP annonces par le serveur (V3.1+).
+/// - les ports UDP annonces par le serveur (V3.1+) ;
+/// - les cles AEAD pour UDP (epoch 1, V3.1+).
 pub struct HandshakeOutcome {
-    /// AEAD pour les envois sortants de **ce** pair.
+    /// AEAD pour les envois sortants TCP de **ce** pair.
     pub aead_send: AeadSession,
-    /// AEAD pour les receptions entrantes vers **ce** pair.
+    /// AEAD pour les receptions entrantes TCP vers **ce** pair.
     pub aead_recv: AeadSession,
     /// Identite long-terme du pair distant.
     pub remote_identity: DeviceId,
@@ -84,6 +85,14 @@ pub struct HandshakeOutcome {
     ///
     /// Vide si aucun canal UDP n'a été négocié (V3.0 et avant).
     pub udp_ports: Vec<(u8, u16)>,
+    /// Cles AEAD pour le canal UDP, dérivées à l'epoch 1 via HKDF (séparé de
+    /// l'epoch 0 utilisé pour TCP — pas de chevauchement de nonce space).
+    ///
+    /// - `Some((send_key, recv_key))` si UDP est négocié (`!udp_ports.is_empty()`).
+    /// - `None` sinon — pas de gaspillage de calcul KDF.
+    ///
+    /// Le caller instancie `AeadSession::new(&key, 1)` pour chaque sens.
+    pub udp_keys: Option<(AeadKey, AeadKey)>,
 }
 
 // ===========================================================================
@@ -326,6 +335,14 @@ where
         return Err(DriverError::Rejected(sf.reason));
     }
 
+    // V3.1 — UDP keys dérivées à l'epoch 1 si le serveur annonce des ports UDP.
+    let udp_keys = if sf.udp_ports.is_empty() {
+        None
+    } else {
+        let udp_secrets = hs.derive_session_keys_now(1)?;
+        Some((udp_secrets.key_c2s, udp_secrets.key_s2c))
+    };
+
     Ok(HandshakeOutcome {
         aead_send,
         aead_recv,
@@ -334,6 +351,7 @@ where
         channels: cf.selected_channels,
         transcript_hash: secrets.transcript_hash,
         udp_ports: sf.udp_ports,
+        udp_keys,
     })
 }
 
@@ -461,6 +479,14 @@ where
         return Err(DriverError::Rejected(sf.reason));
     }
 
+    // V3.1 — UDP keys dérivées à l'epoch 1 si on advertise des ports UDP.
+    let udp_keys = if local_udp_ports.is_empty() {
+        None
+    } else {
+        let udp_secrets = hs.derive_session_keys_now(1)?;
+        Some((udp_secrets.key_s2c, udp_secrets.key_c2s))
+    };
+
     Ok(HandshakeOutcome {
         aead_send,
         aead_recv,
@@ -469,6 +495,7 @@ where
         channels: cf.selected_channels,
         transcript_hash: secrets.transcript_hash,
         udp_ports: local_udp_ports,
+        udp_keys,
     })
 }
 

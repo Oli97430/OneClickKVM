@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::net::TcpListener;
+use tokio::net::{TcpListener, UdpSocket};
 use tokio::sync::mpsc;
 
 use okvm_core::{Capabilities, IdentityKeypair};
@@ -12,6 +12,11 @@ use okvm_protocol::messages::RejectReason;
 
 use crate::handshake::{drive_server, DriverError};
 use crate::session::Session;
+
+/// Identifiant du canal audio dans les `udp_ports` annoncés par le serveur.
+/// (Doit matcher `Channel::Audio as u8` mais on l'inline pour ne pas importer
+/// la dépendance ici.)
+const UDP_CHANNEL_AUDIO: u8 = 3;
 
 /// Configuration du listener.
 #[derive(Debug, Clone)]
@@ -120,16 +125,37 @@ impl Listener {
             let tx2 = tx.clone();
 
             tokio::spawn(async move {
+                // V3.1 step 2 : bind un UDP socket éphémère pour le canal
+                // audio AVANT le handshake afin de connaître la port à
+                // annoncer dans ServerFinished.udp_ports. Best-effort : si
+                // bind échoue (port exhaustion, perm denied), on continue
+                // sans UDP — l'audio retombera sur TCP.
+                let local_bind_ip = cfg.bind.ip();
+                let udp_socket = match UdpSocket::bind(SocketAddr::new(local_bind_ip, 0)).await {
+                    Ok(s) => Some(s),
+                    Err(e) => {
+                        tracing::warn!(error = %e, "bind UDP audio echec — fallback TCP");
+                        None
+                    }
+                };
+                let local_udp_ports = match &udp_socket {
+                    Some(s) => match s.local_addr() {
+                        Ok(addr) => vec![(UDP_CHANNEL_AUDIO, addr.port())],
+                        Err(e) => {
+                            tracing::warn!(error = %e, "local_addr UDP echec");
+                            Vec::new()
+                        }
+                    },
+                    None => Vec::new(),
+                };
+
                 let outcome = match drive_server(
                     &mut stream,
                     identity,
                     caps,
                     move |ch| (acl)(ch),
                     cfg.handshake_timeout,
-                    // V3.1 step 1 : aucun port UDP advertise par défaut. Le
-                    // wiring complet (bind socket + advertise port) viendra
-                    // dans V3.1 step 2.
-                    Vec::new(),
+                    local_udp_ports,
                 )
                 .await
                 {
@@ -139,6 +165,21 @@ impl Listener {
                         return;
                     }
                 };
+                // Logge si le handshake a effectivement publié le port UDP.
+                if let Some(udp_port) = outcome
+                    .udp_ports
+                    .iter()
+                    .find(|(ch, _)| *ch == UDP_CHANNEL_AUDIO)
+                    .map(|(_, p)| *p)
+                {
+                    tracing::debug!(peer = %peer_addr, udp_port, "session avec UDP audio");
+                } else if udp_socket.is_some() {
+                    tracing::debug!(peer = %peer_addr, "UDP socket bindée mais pas advertise");
+                }
+                // V3.1 step 3 wiring : passer `udp_socket` + `outcome.udp_keys`
+                // à Session::start_with_udp() pour brancher le canal audio.
+                // Pour l'instant on garde la session TCP-only et on drop le socket.
+                drop(udp_socket);
                 let session = Session::start(
                     stream,
                     outcome,

@@ -3,7 +3,7 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use tokio::net::TcpStream;
+use tokio::net::{TcpStream, UdpSocket};
 
 use okvm_core::{Capabilities, IdentityKeypair};
 use okvm_protocol::messages::ChannelDesc;
@@ -102,6 +102,36 @@ impl Connector {
             self.cfg.handshake_timeout,
         )
         .await?;
+
+        // V3.1 step 2 : si le serveur a annoncé un port UDP audio, on bind
+        // un UDP socket local et on calcule l'addr distante pour future
+        // émission. Best-effort : si bind échoue, audio retombera sur TCP.
+        // (Le step 3 brancherait ce socket sur la Session ; pour l'instant
+        // on logge juste l'établissement réussi.)
+        if let Some((_chan, server_udp_port)) =
+            outcome.udp_ports.iter().find(|(ch, _)| *ch == 3).copied()
+        {
+            let server_udp_addr = SocketAddr::new(self.cfg.remote.ip(), server_udp_port);
+            let bind_local_ip = match self.cfg.remote {
+                SocketAddr::V4(_) => "0.0.0.0".parse().unwrap(),
+                SocketAddr::V6(_) => "::".parse().unwrap(),
+            };
+            match UdpSocket::bind(SocketAddr::new(bind_local_ip, 0)).await {
+                Ok(socket) => {
+                    let local_addr = socket.local_addr().ok();
+                    tracing::info!(
+                        local = ?local_addr,
+                        remote = %server_udp_addr,
+                        "UDP audio socket bound (V3.1 step 2 — pas encore wired sur audio)"
+                    );
+                    drop(socket); // step 3 = passer à Session::start_with_udp(socket, server_udp_addr)
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "client UDP bind echec — fallback TCP audio");
+                }
+            }
+        }
+
         Ok(Session::start(
             stream,
             outcome,
