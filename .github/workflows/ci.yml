@@ -42,11 +42,14 @@ jobs:
 
       - name: cargo fmt --check
         run: cargo fmt --all -- --check
-        continue-on-error: true # info-only au début, à durcir plus tard
 
-      - name: cargo clippy
+      - name: cargo clippy (informational)
+        # Notre lib utilise clippy::pedantic qui a 81 suggestions actuelles
+        # (cast_lossless, etc.) — cleanup en cours, voir backlog
+        # « clippy pedantic cleanup ». Pour l'instant on log mais on ne
+        # bloque pas la CI.
         run: cargo clippy --workspace --all-targets -- -D warnings
-        continue-on-error: true # info-only au début, à durcir plus tard
+        continue-on-error: true
 
       - name: cargo test --workspace
         run: cargo test --workspace --no-fail-fast
