@@ -1,0 +1,50 @@
+# Force LF line endings on text files cross-platform — évite que `cargo fmt
+# --check` échoue sur le runner Windows CI à cause de l'autocrlf de git
+# (rustfmt.toml impose `newline_style = "Unix"`).
+#
+# https://docs.github.com/en/get-started/getting-started-with-git/configuring-git-to-handle-line-endings
+
+* text=auto eol=lf
+
+# Rust / Cargo
+*.rs       text eol=lf
+*.toml     text eol=lf
+*.lock     text eol=lf
+
+# Frontend
+*.js       text eol=lf
+*.ts       text eol=lf
+*.tsx      text eol=lf
+*.svelte   text eol=lf
+*.json     text eol=lf
+*.html     text eol=lf
+*.css      text eol=lf
+*.scss     text eol=lf
+
+# Docs / config
+*.md       text eol=lf
+*.yml      text eol=lf
+*.yaml     text eol=lf
+
+# Scripts shell — LF
+*.sh       text eol=lf
+
+# Scripts PowerShell — Windows native, CRLF
+*.ps1      text eol=crlf
+*.psm1     text eol=crlf
+
+# Fichiers binaires : pas de conversion
+*.png      binary
+*.jpg      binary
+*.jpeg     binary
+*.gif      binary
+*.ico      binary
+*.icns     binary
+*.exe      binary
+*.dll      binary
+*.pdb      binary
+*.zip      binary
+*.gz       binary
+*.tar      binary
+*.7z       binary
+*.pdf      binary
