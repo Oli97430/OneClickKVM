@@ -143,7 +143,7 @@ mod tests {
             shard_len: 2048,
         };
         let mut buf = [0u8; HEADER_LEN];
-        h.encode(&mut buf);
+        let _ = h.encode(&mut buf);
         // Construire un faux datagramme : header + payload de la taille déclarée.
         let mut dg = buf.to_vec();
         dg.extend_from_slice(&vec![0xAA_u8; 2048]);
@@ -172,7 +172,7 @@ mod tests {
             shard_len: 25,
         };
         let mut buf = [0u8; HEADER_LEN];
-        h.encode(&mut buf);
+        let _ = h.encode(&mut buf);
         let mut dg = buf.to_vec();
         dg.extend_from_slice(&[0u8; 25]);
         assert!(matches!(
@@ -192,7 +192,7 @@ mod tests {
             shard_len: 50, // annoncé 50
         };
         let mut buf = [0u8; HEADER_LEN];
-        h.encode(&mut buf);
+        let _ = h.encode(&mut buf);
         let mut dg = buf.to_vec();
         dg.extend_from_slice(&[0u8; 30]); // mais on n'a que 30 octets
         assert!(matches!(

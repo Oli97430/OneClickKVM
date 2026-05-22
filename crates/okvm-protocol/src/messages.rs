@@ -19,6 +19,12 @@ use okvm_core::{
 // ===========================================================================
 
 /// Messages échangés sur le canal de contrôle.
+///
+/// Chaque variant est documenté inline ; les champs internes (timestamps,
+/// stats, codes d'erreur) ont des noms self-explanatory dans le contexte
+/// de leur variant, donc on supprime ici la règle `missing_docs` au niveau
+/// type pour éviter une duplication de documentation.
+#[allow(missing_docs)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum CtrlMessage {
@@ -63,6 +69,11 @@ pub enum RejectReason {
 // ===========================================================================
 
 /// Messages temps-réel circulant sur le canal input.
+///
+/// Variants documentés inline. Les champs `x/y/dx/dy/state/...` ont des
+/// noms standards dans le contexte input ; on dispense de docs par champ
+/// (cf. note sur `CtrlMessage`).
+#[allow(missing_docs)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum InputMessage {
@@ -165,6 +176,7 @@ pub enum InputMessage {
 }
 
 /// Items que peut contenir un `ClipboardUpdate`.
+#[allow(missing_docs)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum ClipboardItem {
@@ -186,6 +198,7 @@ pub enum ClipboardItem {
 // ===========================================================================
 
 /// Messages du canal transfert de fichiers.
+#[allow(missing_docs)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum FileMessage {
@@ -244,6 +257,7 @@ pub struct FileEntry {
 }
 
 /// Compression appliquée par chunk.
+#[allow(missing_docs)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum Compression {
@@ -258,6 +272,7 @@ pub enum Compression {
 // ===========================================================================
 
 /// Messages audio.
+#[allow(missing_docs)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum AudioMessage {
@@ -291,6 +306,7 @@ pub enum AudioMessage {
 // ===========================================================================
 
 /// Messages vidéo.
+#[allow(missing_docs)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum VideoMessage {

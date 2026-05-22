@@ -1,7 +1,7 @@
 //! Cote reception : valide les chemins, ouvre les fichiers, ecrit les chunks.
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use parking_lot::Mutex;

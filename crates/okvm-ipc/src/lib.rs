@@ -64,6 +64,7 @@ pub struct PairRequest {
 }
 
 /// Résultat d'une tentative d'appairage.
+#[allow(missing_docs)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PairResult {
     /// Appairage réussi.
@@ -77,6 +78,11 @@ pub enum PairResult {
 // ===========================================================================
 
 /// Événement diffusé du backend vers l'UI via Tauri events.
+///
+/// Variants documentés inline. Les champs internes reprennent les noms des
+/// DTOs (`status`, `peer`, `device_id`, `progress`, ...) ; documentation
+/// individuelle redondante avec la doc des types pointés.
+#[allow(missing_docs)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 #[non_exhaustive]

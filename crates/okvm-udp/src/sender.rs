@@ -88,9 +88,10 @@ impl UdpFecSender {
                 plain_len,
                 shard_len,
             };
-            // header
+            // header (`encode` retourne le nombre d'octets écrits, qu'on n'utilise
+            // pas ici car HEADER_LEN est constante).
             let mut hdr_arr = [0u8; HEADER_LEN];
-            hdr.encode(&mut hdr_arr);
+            let _ = hdr.encode(&mut hdr_arr);
             buf[..HEADER_LEN].copy_from_slice(&hdr_arr);
             buf[HEADER_LEN..HEADER_LEN + shard.len()].copy_from_slice(shard);
             let _ = self

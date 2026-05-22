@@ -27,7 +27,12 @@ pub enum FrameError {
     UnknownChannel(u8),
     /// Buffer trop court pour contenir une frame valide.
     #[error("frame tronquée: {got} octets, attendu au moins {need}")]
-    Truncated { got: usize, need: usize },
+    Truncated {
+        /// Taille reçue.
+        got: usize,
+        /// Taille minimum requise.
+        need: usize,
+    },
     /// Échec de déchiffrement AEAD (tag, rejeu, AAD).
     #[error("AEAD decrypt failed (tampering or replay)")]
     AeadDecrypt,

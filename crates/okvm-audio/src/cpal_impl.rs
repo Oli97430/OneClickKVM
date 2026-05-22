@@ -14,7 +14,7 @@ use audiopus::{
     Application, Channels as OpusChannels, SampleRate as OpusSampleRate,
 };
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{Sample, SampleFormat, Stream};
+use cpal::{SampleFormat, Stream};
 use parking_lot::Mutex;
 use tokio::sync::mpsc;
 use uuid::Uuid;
