@@ -424,23 +424,34 @@ impl AppState {
             return Ok(());
         }
         let (tx, mut rx) = mpsc::channel::<VideoMessage>(64);
-        // Lit le backend H.264 préféré depuis la config (défaut MediaFoundation).
-        let backend = match okvm_config::load_app_config()
-            .ok()
-            .map(|c| c.h264_backend)
-            .unwrap_or(okvm_config::H264BackendChoice::MediaFoundation)
-        {
+        // Lit la config : backend H.264 + index de moniteur. Si l'index ne
+        // correspond plus à un écran physique présent, retombe sur 0
+        // (silencieux pour éviter de casser l'UI après un changement de
+        // config matériel).
+        let cfg = okvm_config::load_app_config().unwrap_or_default();
+        let backend = match cfg.h264_backend {
             okvm_config::H264BackendChoice::Openh264 => okvm_video::H264Backend::Openh264,
             okvm_config::H264BackendChoice::MediaFoundation => {
                 okvm_video::H264Backend::MediaFoundation
             }
         };
+        let screen_count = self.capabilities.screens.len() as u32;
+        let screen_idx = if cfg.video_screen_idx < screen_count.max(1) {
+            cfg.video_screen_idx
+        } else {
+            tracing::warn!(
+                requested = cfg.video_screen_idx,
+                available = screen_count,
+                "moniteur demande introuvable, fallback sur 0"
+            );
+            0
+        };
         let capture = WindowsCaptureSource {
             h264_backend: backend,
             ..WindowsCaptureSource::default()
         };
-        tracing::info!(?backend, "video share start");
-        let handle = capture.start(0, tx).await?;
+        tracing::info!(?backend, screen_idx, "video share start");
+        let handle = capture.start(screen_idx, tx).await?;
         *self.video_capture_handle.lock() = Some(handle);
 
         // Fan-out : chaque frame video vers tous les pairs.
@@ -778,14 +789,26 @@ impl AppState {
                 let _ = emit_event(&app_h2, okvm_ipc::BackendEvent::PeerDiscovered { peer: view });
 
                 // === Auto-reconnect ===
+                // Si un pair appairé réapparaît sur le LAN sans qu'on ait de
+                // session active, on tente la reconnexion immédiate. Le user
+                // voit un toast "Reconnexion à ..." puis succès/échec.
                 if already_paired && !already_connected {
                     let id = identity_clone.clone();
                     let caps = caps_clone.clone();
                     let ctx = dispatch_ctx_auto.clone();
                     let addr = peer.addr;
+                    let peer_name = peer.name.clone();
                     let app_h3 = app_h2.clone();
                     tokio::spawn(async move {
-                        tracing::info!(addr = %addr, "auto-reconnect tentative");
+                        tracing::info!(addr = %addr, peer = %peer_name, "auto-reconnect tentative");
+                        let _ = emit_event(
+                            &app_h3,
+                            okvm_ipc::BackendEvent::Notification {
+                                level: okvm_ipc::NotificationLevel::Info,
+                                title: "Reconnexion".into(),
+                                body: format!("Tentative de reconnexion à {peer_name}…"),
+                            },
+                        );
                         let cfg = ConnectorConfig {
                             remote: addr,
                             pairing_pin: None,
@@ -796,9 +819,19 @@ impl AppState {
                             Ok(session) => {
                                 register_session_with_grid(session, &ctx, &app_h3);
                                 tracing::info!(addr = %addr, "auto-reconnect reussi");
+                                let _ = emit_event(
+                                    &app_h3,
+                                    okvm_ipc::BackendEvent::Notification {
+                                        level: okvm_ipc::NotificationLevel::Success,
+                                        title: "Reconnecté".into(),
+                                        body: format!("Session restaurée avec {peer_name}."),
+                                    },
+                                );
                             }
                             Err(e) => {
                                 tracing::debug!(addr = %addr, error = %e, "auto-reconnect echec");
+                                // Pas de toast d'erreur ici — la tentative se relancera
+                                // au prochain pulse de discovery, on évite le spam.
                             }
                         }
                     });

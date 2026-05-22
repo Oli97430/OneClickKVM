@@ -2,11 +2,13 @@
   import { onMount } from "svelte";
   import {
     getAppConfig,
+    listLocalScreens,
     openConfigDir,
     openInboxDir,
     resetAllSettings,
     setAppConfig,
     type AppConfig,
+    type ScreenView,
   } from "../ipc";
   import { pushNotification } from "./Notifications.svelte";
   import { setLang, t } from "../i18n.svelte";
@@ -15,6 +17,7 @@
   let cfg = $state<AppConfig | null>(null);
   let saving = $state(false);
   let confirmingReset = $state(false);
+  let screens = $state<ScreenView[]>([]);
 
   // Switch live de la langue et du theme dans le formulaire pour preview
   // immediat — sans avoir besoin de cliquer "Enregistrer".
@@ -38,6 +41,11 @@
         title: "Erreur chargement config",
         body: String(e),
       });
+    }
+    try {
+      screens = await listLocalScreens();
+    } catch (e) {
+      console.warn("listLocalScreens failed", e);
     }
   });
 
@@ -132,6 +140,21 @@
         </select>
         <span class="hint">{t("settings.h264_backend.hint")}</span>
       </label>
+
+      {#if screens.length > 1}
+        <label class="field">
+          <span class="label">{t("settings.screen")}</span>
+          <select bind:value={cfg.video_screen_idx}>
+            {#each screens as s}
+              <option value={s.index}>
+                #{s.index} — {s.width_px}×{s.height_px}
+                {s.is_primary ? `(${t("settings.screen.primary")})` : ""}
+              </option>
+            {/each}
+          </select>
+          <span class="hint">{t("settings.screen.hint")}</span>
+        </label>
+      {/if}
 
       <label class="field-row">
         <input type="checkbox" bind:checked={cfg.autostart} />

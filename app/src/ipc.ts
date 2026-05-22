@@ -116,6 +116,20 @@ export interface AppConfig {
   discovery_mdns: boolean;
   redact_logs: boolean;
   h264_backend: H264BackendChoice;
+  video_screen_idx: number;
+}
+
+export interface ScreenView {
+  index: number;
+  is_primary: boolean;
+  width_px: number;
+  height_px: number;
+  origin_x: number;
+  origin_y: number;
+}
+
+export async function listLocalScreens(): Promise<ScreenView[]> {
+  return await invoke("list_local_screens");
 }
 
 export interface H264EncoderView {

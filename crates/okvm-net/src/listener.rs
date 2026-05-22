@@ -126,6 +126,10 @@ impl Listener {
                     caps,
                     move |ch| (acl)(ch),
                     cfg.handshake_timeout,
+                    // V3.1 step 1 : aucun port UDP advertise par défaut. Le
+                    // wiring complet (bind socket + advertise port) viendra
+                    // dans V3.1 step 2.
+                    Vec::new(),
                 )
                 .await
                 {

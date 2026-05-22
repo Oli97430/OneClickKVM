@@ -54,6 +54,7 @@ pub fn run() {
             commands::start_pairing_mode,
             commands::stop_pairing_mode,
             commands::get_pairing_mode_status,
+            commands::list_local_screens,
             commands::get_about_info,
         ])
         .setup(|app| {

@@ -51,6 +51,10 @@ pub struct AppConfig {
     /// openh264 si l'init MFT échoue.
     #[serde(default = "default_h264_backend")]
     pub h264_backend: H264BackendChoice,
+    /// Index du moniteur à partager (0 = primaire). Si la valeur référence un
+    /// moniteur qui n'existe plus, on retombe silencieusement sur 0.
+    #[serde(default)]
+    pub video_screen_idx: u32,
 }
 
 fn default_h264_backend() -> H264BackendChoice {
@@ -98,6 +102,7 @@ impl Default for AppConfig {
             redact_logs: true,
             window_state: None,
             h264_backend: default_h264_backend(),
+            video_screen_idx: 0,
         }
     }
 }

@@ -519,6 +519,35 @@ pub struct PairingModeView {
     pub expires_at_ms: Option<u64>,
 }
 
+/// Liste les écrans locaux pour le sélecteur de moniteur dans Settings.
+/// L'index correspond à celui consommé par `WindowsCaptureSource.start`.
+#[tauri::command]
+pub async fn list_local_screens(state: State<'_, AppState>) -> Result<Vec<ScreenView>, String> {
+    Ok(state
+        .capabilities
+        .screens
+        .iter()
+        .map(|s| ScreenView {
+            index: s.index,
+            is_primary: s.is_primary,
+            width_px: s.width_px,
+            height_px: s.height_px,
+            origin_x: s.origin_x,
+            origin_y: s.origin_y,
+        })
+        .collect())
+}
+
+#[derive(serde::Serialize)]
+pub struct ScreenView {
+    pub index: u32,
+    pub is_primary: bool,
+    pub width_px: u32,
+    pub height_px: u32,
+    pub origin_x: i32,
+    pub origin_y: i32,
+}
+
 /// Renvoie la grille spatiale des pairs (pour visualisation UI).
 #[tauri::command]
 pub async fn get_grid(state: State<'_, AppState>) -> Result<Vec<GridPeerView>, String> {

@@ -62,7 +62,8 @@ pub enum DriverError {
 /// - les `AeadSession` deja prepares (compteurs avances de 1 pour Finished) ;
 /// - le hash du transcript final (utile pour pinning / debug) ;
 /// - l'identite et les capabilities du pair distant ;
-/// - la liste des canaux negocies.
+/// - la liste des canaux negocies ;
+/// - les ports UDP annonces par le serveur (V3.1+).
 pub struct HandshakeOutcome {
     /// AEAD pour les envois sortants de **ce** pair.
     pub aead_send: AeadSession,
@@ -76,6 +77,13 @@ pub struct HandshakeOutcome {
     pub channels: Vec<ChannelDesc>,
     /// Hash du transcript a la fin du handshake.
     pub transcript_hash: [u8; 32],
+    /// Ports UDP annonces par le **serveur** dans `ServerFinished.udp_ports`,
+    /// sous forme `(channel_id, port)`.
+    /// - Cote client : indique où envoyer le trafic UDP des canaux concernés.
+    /// - Cote serveur : recopie ce qu'il vient de publier.
+    ///
+    /// Vide si aucun canal UDP n'a été négocié (V3.0 et avant).
+    pub udp_ports: Vec<(u8, u16)>,
 }
 
 // ===========================================================================
@@ -325,6 +333,7 @@ where
         remote_capabilities: sh.capabilities,
         channels: cf.selected_channels,
         transcript_hash: secrets.transcript_hash,
+        udp_ports: sf.udp_ports,
     })
 }
 
@@ -336,12 +345,17 @@ where
 ///
 /// `accept_predicate` est appele apres le `ClientHello` et permet de refuser
 /// la session selon l'ACL (par exemple : pair inconnu et pairing desactive).
+///
+/// `local_udp_ports` est la liste des ports UDP que le serveur publie au
+/// client via `ServerFinished.udp_ports`, sous forme `(channel_id, port)`.
+/// Vide si pas de canal UDP négocié.
 pub async fn drive_server<S, F>(
     stream: &mut S,
     identity: IdentityKeypair,
     capabilities: Capabilities,
     accept_predicate: F,
     handshake_timeout: Duration,
+    local_udp_ports: Vec<(u8, u16)>,
 ) -> Result<HandshakeOutcome, DriverError>
 where
     S: AsyncRead + AsyncWrite + Unpin,
@@ -349,7 +363,13 @@ where
 {
     timeout(
         handshake_timeout,
-        drive_server_inner(stream, identity, capabilities, accept_predicate),
+        drive_server_inner(
+            stream,
+            identity,
+            capabilities,
+            accept_predicate,
+            local_udp_ports,
+        ),
     )
     .await
     .map_err(|_| DriverError::Timeout)?
@@ -360,6 +380,7 @@ async fn drive_server_inner<S, F>(
     identity: IdentityKeypair,
     capabilities: Capabilities,
     accept_predicate: F,
+    local_udp_ports: Vec<(u8, u16)>,
 ) -> Result<HandshakeOutcome, DriverError>
 where
     S: AsyncRead + AsyncWrite + Unpin,
@@ -430,7 +451,7 @@ where
     let sf = ServerFinished {
         accepted,
         reason: decision.err(),
-        udp_ports: Vec::new(),
+        udp_ports: local_udp_ports.clone(),
     };
     let sf_bytes = bincode::serde::encode_to_vec(&sf, bincode_cfg())
         .map_err(|e| DriverError::Codec(e.to_string()))?;
@@ -447,6 +468,7 @@ where
         remote_capabilities: ch.capabilities,
         channels: cf.selected_channels,
         transcript_hash: secrets.transcript_hash,
+        udp_ports: local_udp_ports,
     })
 }
 

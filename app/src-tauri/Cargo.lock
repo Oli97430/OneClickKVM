@@ -2747,7 +2747,7 @@ dependencies = [
 
 [[package]]
 name = "okvm-audio"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "audiopus",
@@ -2764,7 +2764,7 @@ dependencies = [
 
 [[package]]
 name = "okvm-config"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "directories",
  "ed25519-dalek",
@@ -2780,7 +2780,7 @@ dependencies = [
 
 [[package]]
 name = "okvm-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -2793,7 +2793,7 @@ dependencies = [
 
 [[package]]
 name = "okvm-crypto"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "aes-gcm",
  "ed25519-dalek",
@@ -2811,7 +2811,7 @@ dependencies = [
 
 [[package]]
 name = "okvm-discovery"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -2829,7 +2829,7 @@ dependencies = [
 
 [[package]]
 name = "okvm-files"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "blake3",
@@ -2845,7 +2845,7 @@ dependencies = [
 
 [[package]]
 name = "okvm-input-capture"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "okvm-core",
@@ -2860,7 +2860,7 @@ dependencies = [
 
 [[package]]
 name = "okvm-input-inject"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "okvm-core",
@@ -2873,7 +2873,7 @@ dependencies = [
 
 [[package]]
 name = "okvm-ipc"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "okvm-config",
@@ -2888,7 +2888,7 @@ dependencies = [
 
 [[package]]
 name = "okvm-logging"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "okvm-core",
  "parking_lot",
@@ -2900,7 +2900,7 @@ dependencies = [
 
 [[package]]
 name = "okvm-net"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "bincode",
@@ -2922,7 +2922,7 @@ dependencies = [
 
 [[package]]
 name = "okvm-protocol"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bincode",
  "bytes",
@@ -2935,7 +2935,7 @@ dependencies = [
 
 [[package]]
 name = "okvm-switch"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "okvm-core",
  "okvm-protocol",
@@ -2949,7 +2949,7 @@ dependencies = [
 
 [[package]]
 name = "okvm-video"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "image",
@@ -2968,7 +2968,7 @@ dependencies = [
 
 [[package]]
 name = "okvm-wol"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "okvm-core",
@@ -2985,7 +2985,7 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
 name = "oneclick-kvm-app"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "base64 0.22.1",
  "directories",

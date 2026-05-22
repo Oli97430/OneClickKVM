@@ -77,6 +77,9 @@ pub struct VideoHandle {
 pub mod h264;
 
 #[cfg(windows)]
+pub mod d3d11_helper;
+
+#[cfg(windows)]
 pub mod mediafoundation;
 
 #[cfg(windows)]
