@@ -114,6 +114,34 @@ Première release publique (alpha). Prêt pour usage personnel sur LAN de confia
 - Audio en TCP — V3 → UDP + FEC pour basse latence.
 - PIN flow d'appairage côté serveur en attente d'implémentation stricte.
 
+## [0.1.1] — 2026-05-22
+
+Release CI-built reproductible. Aucun changement de comportement utilisateur
+par rapport à v0.1.0 ; valide le pipeline GitHub Actions
+(test + fmt + clippy informational + auto-bundle NSIS).
+
+### Modifié
+
+- **Build reproductible** : installeur produit par GitHub Actions (runner
+  Windows public) au lieu d'un build local. Garantit la même chaîne d'outils
+  et permet l'audit.
+- **Workspace lints** : `[workspace.lints]` centralisé dans `Cargo.toml`
+  racine, hérité par tous les crates via `[lints] workspace = true`.
+- **`.gitattributes`** : force LF cross-plateforme (évite que
+  `cargo fmt --check` casse sur CI Windows à cause d'autocrlf).
+- **`cargo fmt --all`** appliqué : 33 fichiers re-formattés selon
+  `rustfmt.toml`.
+
+### Infra OSS
+
+- CI GitHub Actions Windows (`cargo fmt --check`, `cargo test --workspace`,
+  `svelte-check --fail-on-warnings`).
+- Release auto sur tag `v*.*.*` (build NSIS + SHA-256 + sig Ed25519
+  optionnelle + manifest `latest.json` pour auto-updater).
+- Dependabot hebdo (semver-major ignoré, groupes crypto/tokio/windows/...).
+- Templates issues (bug, feature, config) + PR.
+- `CONTRIBUTING.md`, `SECURITY.md` racine, `.editorconfig`, `rustfmt.toml`.
+
 ## [Unreleased] — V3 en cours
 
 ### Ajouté

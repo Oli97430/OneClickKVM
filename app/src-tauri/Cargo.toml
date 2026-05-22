@@ -1,6 +1,6 @@
 [package]
 name = "oneclick-kvm-app"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "OneClick KVM desktop application (Tauri 2 + Svelte)."
 default-run = "oneclick-kvm-app"
