@@ -165,9 +165,10 @@ Problèmes courants → [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
 Version actuelle : **0.1.1** (alpha, prêt pour usage personnel sur LAN de confiance).
 
 - ✅ 30+ fonctionnalités implémentées (KM, audio, vidéo, fichiers, clipboard, WoL, etc.)
-- ✅ 62 tests unitaires + intégration passants
+- ✅ 83 tests unitaires + intégration passants
 - ✅ Compile cleanly, build release 17 MB, installeur NSIS 4 MB
-- ⚠️ Pas de signature de code Authenticode (Windows SmartScreen avertit)
+- ⚠️ Pas de signature Authenticode (cf. note ci-dessus) — SmartScreen avertit,
+  vérifier le SHA-256 publié sur la release
 - ⚠️ Vidéo en software H.264 (CPU) — V3 ajoutera Media Foundation hardware
 - ⚠️ Audio en TCP (V3 → UDP + FEC pour basse latence)
 
@@ -175,7 +176,6 @@ Version actuelle : **0.1.1** (alpha, prêt pour usage personnel sur LAN de confi
 
 - [ ] Hardware H.264 / NVENC / AMF / QuickSync via Media Foundation
 - [ ] UDP + Reed-Solomon FEC pour audio/vidéo (latence p99 < 30ms cible)
-- [ ] Code signing Authenticode (élimine le warning SmartScreen)
 - [ ] Auto-update Tauri (delta updates depuis GitHub releases)
 
 > **Scope** : OneClick KVM est **Windows-only par design**. Le code s'appuie
@@ -184,6 +184,12 @@ Version actuelle : **0.1.1** (alpha, prêt pour usage personnel sur LAN de confi
 > **pas** prévu — les besoins KVM cross-OS sont déjà très bien couverts par
 > [Barrier](https://github.com/debauchee/barrier) ou
 > [Input Leap](https://github.com/input-leap/input-leap).
+>
+> **Code signing Authenticode** n'est **pas** prévu (~300 €/an de cert
+> récurrent pour un projet personnel ne vaut pas le coût). Conséquence
+> assumée : SmartScreen affiche "Application non reconnue" au premier
+> lancement. Les utilisateurs vérifient l'intégrité via le **SHA-256**
+> publié à chaque release (cf. `sha256.txt`).
 
 ## Licence
 

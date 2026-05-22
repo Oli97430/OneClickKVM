@@ -1,33 +1,28 @@
 # Procédure de release OneClick KVM
 
-Guide pour packager, signer et publier une nouvelle version.
+Guide pour packager et publier une nouvelle version.
 
 ## Vue d'ensemble
 
-OneClick KVM v0.1.0 est distribué comme un installeur **NSIS** non signé. Cela
-fonctionne mais Windows SmartScreen avertit l'utilisateur au premier lancement
-("Application non reconnue").
+Le pipeline release **par défaut** produit un installeur NSIS **non signé**
+attaché à une release GitHub, accompagné de son hash SHA-256 pour vérification
+manuelle d'intégrité. Conséquence : SmartScreen affiche "Application non
+reconnue" au premier lancement chez l'utilisateur, qui doit cliquer
+"Informations complémentaires" → "Exécuter quand même".
 
-À partir de V3, la procédure de release supporte (de façon **optionnelle**) :
-
-- **Signature Authenticode** du binaire et de l'installeur → supprime
-  l'avertissement SmartScreen.
-- **Signature Ed25519** du blob installeur → permet à
-  [`tauri-plugin-updater`](https://v2.tauri.app/plugin/updater/) de vérifier
-  l'authenticité d'une mise à jour avant de l'appliquer.
-- **Manifeste `latest.json`** publié à côté de l'installeur → l'app interroge
-  cette URL pour savoir si une nouvelle version est disponible.
-
-Tout passe par `scripts/release.ps1`.
+Le projet a **choisi de ne pas s'engager** sur Authenticode (~300 €/an de
+cert récurrent, processus EV plus lourd pour effacer SmartScreen sans
+historique de réputation). Le script `release.ps1` **supporte** la signature
+de façon optionnelle si vous changez d'avis — il suffit de pointer
+`OKVM_SIGNTOOL_CERT_PFX` vers un .pfx valide.
 
 ## Pré-requis
 
 - **Rust stable** 1.80+ MSVC (`rustup default stable-x86_64-pc-windows-msvc`)
 - **Node.js 22+** et **pnpm 10+**
-- **Windows SDK** (fournit `signtool.exe` dans
-  `C:\Program Files (x86)\Windows Kits\10\bin\<sdk>\x64\`)
-- (Optionnel) **Certificat Authenticode** au format `.pfx` (acheté chez
-  DigiCert / Sectigo / SSL.com, ou auto-signé pour les tests).
+- (Optionnel — uniquement si vous activez la signature)
+  - **Windows SDK** pour `signtool.exe`
+  - **Certificat Authenticode** au format `.pfx`
 - (Optionnel) **Clé privée Ed25519** pour Tauri updater, générée avec :
   ```powershell
   pnpm tauri signer generate -w okvm-update.key

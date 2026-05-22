@@ -85,18 +85,23 @@ Problèmes courants et leur résolution.
 
 ## "L'installeur est bloqué par SmartScreen"
 
-C'est normal en v0.1.x : l'installeur n'est pas signé Authenticode.
+**Comportement attendu et permanent**. OneClick KVM est un projet personnel
+qui ne s'engage pas sur une certification Authenticode (~300 €/an de cert
+récurrent). SmartScreen affichera donc toujours "Application non reconnue"
+au premier lancement.
 
-Sur la fenêtre **"Windows protected your PC"** :
-1. Cliquer sur **"More info"** (ou "Informations complémentaires")
-2. Cliquer sur **"Run anyway"** (ou "Exécuter quand même")
-
-Ou vérifier le hash SHA-256 publié dans la release GitHub pour
-s'assurer que l'EXE n'a pas été modifié :
+**Pour vérifier l'intégrité du téléchargement** (recommandé à chaque
+nouvelle release), comparer le SHA-256 publié sur la page release GitHub :
 
 ```powershell
 Get-FileHash -Algorithm SHA256 .\OneClick' KVM_0.1.x_x64-setup.exe
-# Comparer avec sha256.txt publié sur la même release
+# Comparer avec le hash dans sha256.txt sur la release
 ```
 
-Le code signing arrive en V3 (cf. [docs/RELEASE.md](RELEASE.md)).
+Si les hashes matchent, c'est l'installeur officiel — pas un fichier altéré
+sur le chemin. Vous pouvez ensuite :
+1. Cliquer **"Informations complémentaires"** sur la pop-up SmartScreen
+2. Cliquer **"Exécuter quand même"**
+
+Si les hashes **diffèrent**, **ne pas exécuter** et signaler une issue
+GitHub : il y a eu un MITM sur ton téléchargement.

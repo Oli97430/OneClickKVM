@@ -58,3 +58,6 @@ DPAPI).
 - **Bugs UI / crash sans escalation** : utiliser le tracker public.
 - **Attaques DoS LAN** (saturation broadcast) : best effort, pas une
   priorité tant que l'app reste cantonnée à un LAN de confiance.
+- **SmartScreen / signature Authenticode** : assumé. Pas de cert Authenticode
+  prévu (cf. README). La vérification d'intégrité passe par le SHA-256 publié
+  sur chaque release — comparer avant exécution.
