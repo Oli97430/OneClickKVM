@@ -19,7 +19,7 @@ pub fn enumerate_local_screens() -> Vec<ScreenInfo> {
 
     // EnumDisplayMonitors prend un callback C-style. On passe l'adresse du Vec
     // via LPARAM.
-    let lp = &mut collected as *mut Vec<ScreenInfo> as isize;
+    let lp = &raw mut collected as isize;
     // SAFETY: EnumDisplayMonitors est l'API standard ; le callback ne fait rien
     // d'unsafe au-dela de la conversion du LPARAM (correctement reconvertie).
     unsafe {
@@ -62,7 +62,7 @@ unsafe extern "system" fn monitor_proc(
         ..Default::default()
     };
     // SAFETY: mi est correctement initialisee.
-    if unsafe { GetMonitorInfoW(hmon, &mut mi) }.as_bool() {
+    if unsafe { GetMonitorInfoW(hmon, &raw mut mi) }.as_bool() {
         let w = (mi.rcMonitor.right - mi.rcMonitor.left) as u32;
         let h = (mi.rcMonitor.bottom - mi.rcMonitor.top) as u32;
         collected.push(ScreenInfo {

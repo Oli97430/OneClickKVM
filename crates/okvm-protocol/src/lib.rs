@@ -1,4 +1,4 @@
-//! `okvm-protocol` — sérialisation et framing du protocole réseau OneClick KVM.
+//! `okvm-protocol` — sérialisation et framing du protocole réseau `OneClick` KVM.
 //!
 //! Voir `docs/PROTOCOL.md` pour le wire format complet. Cette crate :
 //!

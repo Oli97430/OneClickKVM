@@ -20,10 +20,10 @@
 //!
 //! ## Pourquoi ne pas avoir tout livré d'un coup ?
 //!
-//! Le wiring complet d'un MFT H264 est ~500 lignes de COM Win32 (ProcessInput
-//! / ProcessOutput / IMFSample / IMFMediaBuffer / NV12 conversion / drain à
+//! Le wiring complet d'un MFT H264 est ~500 lignes de COM Win32 (`ProcessInput`
+//! / `ProcessOutput` / `IMFSample` / `IMFMediaBuffer` / NV12 conversion / drain à
 //! l'arrêt). Le faire correctement nécessite des tests sur GPU réels
-//! (NVENC, QuickSync, AMF) — du coup on procède en deux étapes :
+//! (NVENC, `QuickSync`, AMF) — du coup on procède en deux étapes :
 //!
 //! 1. **Maintenant** : détection + skeleton + factory (cette PR).
 //! 2. **Ensuite** : encoder wrapper complet + tests E2E (V3.1).
@@ -109,9 +109,9 @@ pub fn enumerate_h264_encoders() -> Result<Vec<H264EncoderInfo>, String> {
             MFT_CATEGORY_VIDEO_ENCODER,
             flags,
             None,
-            Some(&output_type),
-            &mut activates,
-            &mut count,
+            Some(&raw const output_type),
+            &raw mut activates,
+            &raw mut count,
         )
         .map_err(|e| format!("MFTEnumEx: {e}"))?;
     }
@@ -168,7 +168,7 @@ fn read_friendly_name(act: &IMFActivate) -> String {
         let mut buf_ptr: windows::core::PWSTR = windows::core::PWSTR(std::ptr::null_mut());
         let mut len: u32 = 0;
         if act
-            .GetAllocatedString(&MFT_FRIENDLY_NAME_Attribute, &mut buf_ptr, &mut len)
+            .GetAllocatedString(&MFT_FRIENDLY_NAME_Attribute, &raw mut buf_ptr, &raw mut len)
             .is_err()
         {
             return "<unnamed>".into();
@@ -191,7 +191,11 @@ fn check_hardware_flag(act: &IMFActivate) -> bool {
     unsafe {
         let mut buf_ptr: windows::core::PWSTR = windows::core::PWSTR(std::ptr::null_mut());
         let mut len: u32 = 0;
-        let res = act.GetAllocatedString(&MFT_ENUM_HARDWARE_URL_Attribute, &mut buf_ptr, &mut len);
+        let res = act.GetAllocatedString(
+            &MFT_ENUM_HARDWARE_URL_Attribute,
+            &raw mut buf_ptr,
+            &raw mut len,
+        );
         if !buf_ptr.0.is_null() {
             windows::Win32::System::Com::CoTaskMemFree(Some(buf_ptr.0.cast()));
         }

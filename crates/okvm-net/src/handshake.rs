@@ -72,7 +72,7 @@ pub struct HandshakeOutcome {
     pub remote_identity: DeviceId,
     /// Capacites annoncees par le pair distant.
     pub remote_capabilities: Capabilities,
-    /// Canaux negocies (extrait de ClientFinished).
+    /// Canaux negocies (extrait de `ClientFinished`).
     pub channels: Vec<ChannelDesc>,
     /// Hash du transcript a la fin du handshake.
     pub transcript_hash: [u8; 32],
@@ -163,7 +163,7 @@ where
 // ServerHello sign-and-patch
 // ===========================================================================
 
-/// Encode un ServerHello avec une signature placeholder, puis renvoie
+/// Encode un `ServerHello` avec une signature placeholder, puis renvoie
 /// `(bytes complets, offset de la signature 64 octets)`.
 ///
 /// Le layout bincode standard pour `[u8; 64]` via `serialize_bytes` est :
@@ -334,7 +334,7 @@ where
 
 /// Conduit le handshake **cote serveur** (receveur).
 ///
-/// `accept_predicate` est appele apres le ClientHello et permet de refuser
+/// `accept_predicate` est appele apres le `ClientHello` et permet de refuser
 /// la session selon l'ACL (par exemple : pair inconnu et pairing desactive).
 pub async fn drive_server<S, F>(
     stream: &mut S,

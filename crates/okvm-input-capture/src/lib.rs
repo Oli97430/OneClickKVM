@@ -44,7 +44,7 @@ pub struct CaptureHandle {
     pub set_suppress: tokio::sync::watch::Sender<bool>,
     /// Signal d'arret du thread Win32.
     pub stop: tokio::sync::oneshot::Sender<()>,
-    /// JoinHandle de la task bridge mpsc.
+    /// `JoinHandle` de la task bridge mpsc.
     pub bridge: tokio::task::JoinHandle<()>,
 }
 

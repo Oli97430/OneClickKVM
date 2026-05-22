@@ -46,7 +46,7 @@ pub struct AppConfig {
     #[serde(default)]
     pub window_state: Option<WindowState>,
     /// Backend H.264 préféré pour la capture d'écran sortante. Défaut :
-    /// MediaFoundation sur Windows (souvent plus rapide qu'openh264 grâce aux
+    /// `MediaFoundation` sur Windows (souvent plus rapide qu'openh264 grâce aux
     /// optimisations SSE/AVX du MFT Microsoft). Fallback automatique vers
     /// openh264 si l'init MFT échoue.
     #[serde(default = "default_h264_backend")]

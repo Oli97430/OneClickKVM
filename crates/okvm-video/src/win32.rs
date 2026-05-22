@@ -190,12 +190,11 @@ fn run_capture_thread(
     init_tx: std_mpsc::Sender<std::result::Result<StreamInfo, String>>,
 ) {
     // Selectionne le moniteur.
-    let monitor = match select_monitor(screen_idx) {
-        Some(m) => m,
-        None => {
-            let _ = init_tx.send(Err(format!("moniteur d'index {screen_idx} introuvable")));
-            return;
-        }
+    let monitor = if let Some(m) = select_monitor(screen_idx) {
+        m
+    } else {
+        let _ = init_tx.send(Err(format!("moniteur d'index {screen_idx} introuvable")));
+        return;
     };
 
     // Determine le codec : tente H.264 si demande, avec le backend choisi.
@@ -332,7 +331,7 @@ impl GraphicsCaptureApiHandler for FrameEncoderHandler {
 
     fn new(ctx: Context<Self::Flags>) -> std::result::Result<Self, Self::Error> {
         let flags = ctx.flags;
-        let interval_ms = (1000 / flags.target_fps.max(1)) as u64;
+        let interval_ms = u64::from(1000 / flags.target_fps.max(1));
         let h264_cfg = H264Config {
             width: flags.target_width,
             height: flags.target_height,
@@ -364,7 +363,9 @@ impl GraphicsCaptureApiHandler for FrameEncoderHandler {
             frame_count: 0,
             keyframe_every: flags.target_fps * 2, // toutes les 2s
             frame_tx: flags.frame_tx,
-            last_emit: std::time::Instant::now() - std::time::Duration::from_secs(60),
+            last_emit: std::time::Instant::now()
+                .checked_sub(std::time::Duration::from_secs(60))
+                .unwrap(),
             min_interval: std::time::Duration::from_millis(interval_ms),
         })
     }
@@ -419,42 +420,39 @@ impl GraphicsCaptureApiHandler for FrameEncoderHandler {
 
         // Encode selon le codec.
         let mut is_keyframe = false;
-        let payload = match (self.codec, self.h264.as_mut()) {
-            (VideoCodec::H264, Some(enc)) => {
-                // Force un keyframe periodiquement.
-                if self.frame_count % self.keyframe_every == 0 {
-                    enc.force_keyframe();
-                    is_keyframe = true;
-                }
-                self.frame_count = self.frame_count.wrapping_add(1);
-                match enc.encode_rgb(&rgb_resized) {
-                    Ok(b) => b,
-                    Err(e) => {
-                        tracing::warn!(error = %e, "H264 encode echec, frame droppee");
-                        return Ok(());
-                    }
+        let payload = if let (VideoCodec::H264, Some(enc)) = (self.codec, self.h264.as_mut()) {
+            // Force un keyframe periodiquement.
+            if self.frame_count.is_multiple_of(self.keyframe_every) {
+                enc.force_keyframe();
+                is_keyframe = true;
+            }
+            self.frame_count = self.frame_count.wrapping_add(1);
+            match enc.encode_rgb(&rgb_resized) {
+                Ok(b) => b,
+                Err(e) => {
+                    tracing::warn!(error = %e, "H264 encode echec, frame droppee");
+                    return Ok(());
                 }
             }
-            _ => {
-                // MJPEG : on encode JPEG.
-                is_keyframe = true; // chaque JPEG est independant
-                let resized_img = image::DynamicImage::ImageRgb8(
-                    image::RgbImage::from_raw(self.target_width, self.target_height, rgb_resized)
-                        .unwrap_or_else(|| image::RgbImage::new(1, 1)),
+        } else {
+            // MJPEG : on encode JPEG.
+            is_keyframe = true; // chaque JPEG est independant
+            let resized_img = image::DynamicImage::ImageRgb8(
+                image::RgbImage::from_raw(self.target_width, self.target_height, rgb_resized)
+                    .unwrap_or_else(|| image::RgbImage::new(1, 1)),
+            );
+            let mut jpeg = Vec::with_capacity(64 * 1024);
+            {
+                let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(
+                    &mut jpeg,
+                    self.jpeg_quality,
                 );
-                let mut jpeg = Vec::with_capacity(64 * 1024);
-                {
-                    let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(
-                        &mut jpeg,
-                        self.jpeg_quality,
-                    );
-                    if let Err(e) = encoder.encode_image(&resized_img) {
-                        tracing::warn!(error = %e, "JPEG encode echec");
-                        return Ok(());
-                    }
+                if let Err(e) = encoder.encode_image(&resized_img) {
+                    tracing::warn!(error = %e, "JPEG encode echec");
+                    return Ok(());
                 }
-                jpeg
             }
+            jpeg
         };
 
         if self

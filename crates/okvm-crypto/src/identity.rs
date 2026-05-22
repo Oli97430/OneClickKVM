@@ -21,7 +21,7 @@ pub enum IdentityError {
 
 /// Génère une nouvelle identité Ed25519 à partir du RNG de l'OS.
 ///
-/// La seed est tirée via `getrandom` (BCryptGenRandom sur Windows) puis
+/// La seed est tirée via `getrandom` (`BCryptGenRandom` sur Windows) puis
 /// transformée en `SigningKey`. La clé publique correspondante est exposée
 /// comme [`DeviceId`].
 ///

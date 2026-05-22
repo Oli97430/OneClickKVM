@@ -28,7 +28,7 @@ const DESCRIPTION: &str = "OneClickKVM-identity-v1";
 /// Chiffre `plain` avec DPAPI scope utilisateur courant.
 #[cfg(windows)]
 pub fn protect(plain: &[u8]) -> Result<Vec<u8>> {
-    let mut in_blob = CRYPT_INTEGER_BLOB {
+    let in_blob = CRYPT_INTEGER_BLOB {
         cbData: u32::try_from(plain.len())
             .map_err(|_| Error::Crypto("plain trop grand pour DPAPI".into()))?,
         pbData: plain.as_ptr().cast_mut(),
@@ -46,13 +46,13 @@ pub fn protect(plain: &[u8]) -> Result<Vec<u8>> {
     // doit etre liberee via LocalFree, ce qu'on fait juste apres avoir copie.
     unsafe {
         CryptProtectData(
-            &mut in_blob,
+            &raw const in_blob,
             PCWSTR(desc_w.as_ptr()),
             None,
             None,
             None,
             0,
-            &mut out_blob,
+            &raw mut out_blob,
         )
         .map_err(|e| Error::Crypto(format!("CryptProtectData: {e}")))?;
 
@@ -72,7 +72,7 @@ pub fn protect(plain: &[u8]) -> Result<Vec<u8>> {
 /// Dechiffre un blob produit par [`protect`].
 #[cfg(windows)]
 pub fn unprotect(cipher: &[u8]) -> Result<Vec<u8>> {
-    let mut in_blob = CRYPT_INTEGER_BLOB {
+    let in_blob = CRYPT_INTEGER_BLOB {
         cbData: u32::try_from(cipher.len())
             .map_err(|_| Error::Crypto("cipher trop grand pour DPAPI".into()))?,
         pbData: cipher.as_ptr().cast_mut(),
@@ -81,8 +81,16 @@ pub fn unprotect(cipher: &[u8]) -> Result<Vec<u8>> {
 
     // SAFETY: identique a protect ; on libere out_blob.pbData via LocalFree.
     unsafe {
-        CryptUnprotectData(&mut in_blob, None, None, None, None, 0, &mut out_blob)
-            .map_err(|e| Error::Crypto(format!("CryptUnprotectData: {e}")))?;
+        CryptUnprotectData(
+            &raw const in_blob,
+            None,
+            None,
+            None,
+            None,
+            0,
+            &raw mut out_blob,
+        )
+        .map_err(|e| Error::Crypto(format!("CryptUnprotectData: {e}")))?;
 
         if out_blob.pbData.is_null() || out_blob.cbData == 0 {
             return Err(Error::Crypto("CryptUnprotectData output vide".into()));

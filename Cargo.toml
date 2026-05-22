@@ -139,6 +139,50 @@ okvm-config    = { path = "crates/okvm-config" }
 okvm-i18n      = { path = "crates/okvm-i18n" }
 okvm-ipc       = { path = "crates/okvm-ipc" }
 
+# ============================================================================
+# Lints partagés par tous les crates du workspace.
+#
+# Activé par chaque crate via `[lints] workspace = true` dans son Cargo.toml.
+# Permet de gérer la politique lints en un seul endroit. (Rust 1.74+)
+# ============================================================================
+[workspace.lints.rust]
+# `unsafe_op_in_unsafe_fn` reste deny — il force chaque appel unsafe à être
+# wrappé dans son propre `unsafe { … }` même au sein d'une fn unsafe.
+unsafe_op_in_unsafe_fn = "deny"
+unreachable_pub = "deny"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+# Active toute la suite pedantic en warn — cleanup progressif des cas
+# triviaux ; les warnings restent visibles localement et dans clippy CI
+# (informational pour l'instant).
+pedantic = { level = "warn", priority = -1 }
+# Suggestions stylistiques qu'on accepte au niveau projet : ce n'est pas un
+# bug, c'est une question de goût.
+unreadable_literal = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+# Conversions numériques : nos casts sont audités au point d'usage ;
+# clippy ne distingue pas une troncation acceptable (count → u16 pour un
+# nb de shards plafonné) d'une vraie perte de précision.
+cast_possible_truncation = "allow"
+cast_sign_loss = "allow"
+cast_lossless = "allow"
+cast_precision_loss = "allow"
+cast_possible_wrap = "allow"
+# UX bénigne : facteur de visibilité de doc.
+doc_markdown = "allow"
+items_after_statements = "allow"
+# Le pattern `match {single_variant => …, _ => …}` est délibéré pour les
+# enums `#[non_exhaustive]` afin de rester forward-compatible.
+match_wildcard_for_single_variants = "allow"
+# Stylistique discutable, on garde la forme verbose.
+needless_pass_by_value = "allow"
+redundant_closure_for_method_calls = "allow"
+similar_names = "allow"
+
 [profile.release]
 opt-level = 3
 lto = "fat"

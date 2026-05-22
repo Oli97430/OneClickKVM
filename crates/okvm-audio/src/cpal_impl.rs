@@ -146,7 +146,7 @@ struct StreamInfo {
 }
 
 /// Boucle principale du thread cpal : ouvre le device, demarre le stream,
-/// attend l'arret (canal pcm_tx ferme).
+/// attend l'arret (canal `pcm_tx` ferme).
 fn run_capture_thread(
     pcm_tx: std_mpsc::Sender<PcmFrame>,
     init_tx: std_mpsc::Sender<std::result::Result<StreamInfo, String>>,
@@ -395,11 +395,11 @@ struct PlaybackInner {
     /// Cap raisonnable pour eviter de gonfler indefiniment si le pair envoie plus
     /// vite que la sortie ne peut consommer.
     buffer: Arc<Mutex<RingBuffer>>,
-    /// Source: stream_id de l'AudioMessage::StreamStart deja recu.
+    /// Source: `stream_id` de l'`AudioMessage::StreamStart` deja recu.
     pub current_stream: Option<Uuid>,
-    /// Codec annonce dans StreamStart (None tant qu'on n'en a pas reçu).
+    /// Codec annonce dans `StreamStart` (None tant qu'on n'en a pas reçu).
     pub current_codec: Option<AudioCodec>,
-    /// Nombre de canaux annonce dans StreamStart.
+    /// Nombre de canaux annonce dans `StreamStart`.
     pub current_channels: u8,
     /// Decoder Opus si codec == Opus.
     pub opus_decoder: Option<OpusDecoder>,
@@ -445,7 +445,7 @@ impl Default for CpalPlayback {
 }
 
 impl CpalPlayback {
-    /// Cree un playback prêt à recevoir des AudioMessage via `push`.
+    /// Cree un playback prêt à recevoir des `AudioMessage` via `push`.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -578,8 +578,7 @@ fn run_playback_thread(sample_rate: u32, channels: u8, buffer: Arc<Mutex<RingBuf
                 *slot = pcm
                     .get(i)
                     .copied()
-                    .map(|s| f32::from(s) / f32::from(i16::MAX))
-                    .unwrap_or(0.0);
+                    .map_or(0.0, |s| f32::from(s) / f32::from(i16::MAX));
             }
         },
         err_fn,

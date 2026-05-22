@@ -15,3 +15,6 @@ thiserror.workspace = true
 [target.'cfg(windows)'.dependencies]
 windows.workspace = true
 parking_lot.workspace = true
+
+[lints]
+workspace = true

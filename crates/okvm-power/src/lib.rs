@@ -6,7 +6,7 @@
 //! - [`PowerAction::Sleep`] → `SetSuspendState(FALSE, TRUE, FALSE)`.
 //! - [`PowerAction::Hibernate`] → `SetSuspendState(TRUE, TRUE, FALSE)`.
 //! - [`PowerAction::Restart`] / [`PowerAction::Shutdown`] → `ExitWindowsEx` avec privilege
-//!   `SeShutdownPrivilege` requis (sinon erreur ACCESS_DENIED renvoyee proprement).
+//!   `SeShutdownPrivilege` requis (sinon erreur `ACCESS_DENIED` renvoyee proprement).
 //!
 //! **Note** : Windows ne permet pas de **deverrouiller** la session a distance
 //! depuis user-mode. C'est une frontiere de securite explicite (cf.
@@ -127,7 +127,7 @@ pub mod win32 {
     ///
     /// # Safety
     /// Appelle plusieurs fonctions Win32 en sequence avec un token de processus
-    /// proprement obtenu. Les structures TOKEN_PRIVILEGES sont initialisees
+    /// proprement obtenu. Les structures `TOKEN_PRIVILEGES` sont initialisees
     /// integralement avant utilisation. Aucun pointeur n'est partage.
     unsafe fn enable_shutdown_privilege() -> Result<()> {
         let mut token = HANDLE::default();
@@ -137,7 +137,7 @@ pub mod win32 {
             OpenProcessToken(
                 GetCurrentProcess(),
                 TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY,
-                &mut token,
+                &raw mut token,
             )
             .map_err(|e| Error::Os(format!("OpenProcessToken: {e}")))?;
         }
@@ -149,11 +149,11 @@ pub mod win32 {
         let mut luid = LUID::default();
         // SAFETY: priv_name est nul-terminee.
         unsafe {
-            LookupPrivilegeValueW(PCWSTR::null(), PCWSTR(priv_name.as_ptr()), &mut luid)
+            LookupPrivilegeValueW(PCWSTR::null(), PCWSTR(priv_name.as_ptr()), &raw mut luid)
                 .map_err(|e| Error::Os(format!("LookupPrivilegeValueW: {e}")))?;
         }
 
-        let mut tp = TOKEN_PRIVILEGES {
+        let tp = TOKEN_PRIVILEGES {
             PrivilegeCount: 1,
             Privileges: [LUID_AND_ATTRIBUTES {
                 Luid: luid,
@@ -163,7 +163,7 @@ pub mod win32 {
 
         // SAFETY: tp est totalement initialise.
         unsafe {
-            AdjustTokenPrivileges(token, false, Some(&mut tp), 0, None, None)
+            AdjustTokenPrivileges(token, false, Some(&raw const tp), 0, None, None)
                 .map_err(|e| Error::Os(format!("AdjustTokenPrivileges: {e}")))?;
         }
 

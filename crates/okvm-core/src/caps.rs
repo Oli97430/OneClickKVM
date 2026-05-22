@@ -67,7 +67,7 @@ pub struct OsInfo {
     pub version: String,
     /// Architecture CPU : `"x86_64"`, `"aarch64"`.
     pub arch: String,
-    /// Nom d'hôte NetBIOS / hostname.
+    /// Nom d'hôte `NetBIOS` / hostname.
     pub hostname: String,
 }
 
@@ -131,20 +131,15 @@ pub enum AudioCodec {
 }
 
 /// Politique de permission attribuée à un pair pour une capacité donnée.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum PermissionPolicy {
     /// Autorisé sans confirmation.
     Allow,
     /// Refusé d'emblée.
     Deny,
     /// Affiche une demande à l'utilisateur à chaque tentative.
+    #[default]
     Prompt,
-}
-
-impl Default for PermissionPolicy {
-    fn default() -> Self {
-        Self::Prompt
-    }
 }
 
 /// Permissions configurables pour chaque pair appairé.

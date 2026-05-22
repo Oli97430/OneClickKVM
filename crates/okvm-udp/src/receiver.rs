@@ -67,7 +67,7 @@ pub struct UdpFecReceiver {
     aead: AeadSession,
     /// Codec partagé (K, M négociés au handshake).
     fec: FecCodec,
-    /// Frames en cours, indexés par `seq`. BTreeMap pour un nettoyage ordonné
+    /// Frames en cours, indexés par `seq`. `BTreeMap` pour un nettoyage ordonné
     /// (les entrées les plus anciennes sont au début, faciles à évincer).
     ///
     /// Capacité plafonnée à [`MAX_PENDING_FRAMES`] — au-delà on évince les plus

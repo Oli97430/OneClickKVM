@@ -11,7 +11,7 @@ use tokio_util::codec::{Decoder, Encoder};
 
 use okvm_protocol::MAX_FRAME_BYTES;
 
-/// Taille maximale acceptee pour le prefixe length (= MAX_FRAME_BYTES).
+/// Taille maximale acceptee pour le prefixe length (= `MAX_FRAME_BYTES`).
 pub const MAX_LENGTH_PREFIX: usize = MAX_FRAME_BYTES;
 
 /// Erreurs du codec.
@@ -25,7 +25,7 @@ pub enum CodecError {
     Io(#[from] std::io::Error),
 }
 
-/// Codec length-prefixed pour les frames OneClick KVM.
+/// Codec length-prefixed pour les frames `OneClick` KVM.
 #[derive(Debug, Default)]
 pub struct FrameCodec {
     /// Etat : `Some(len)` si on a lu le prefixe et qu'on attend `len` octets.

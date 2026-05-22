@@ -22,3 +22,6 @@ openh264.workspace = true
 [target.'cfg(windows)'.dependencies]
 windows.workspace = true
 windows-capture.workspace = true
+
+[lints]
+workspace = true

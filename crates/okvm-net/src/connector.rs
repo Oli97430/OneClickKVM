@@ -70,6 +70,7 @@ pub struct Connector {
 
 impl Connector {
     /// Construit un connector.
+    #[must_use]
     pub fn new(
         cfg: ConnectorConfig,
         identity: IdentityKeypair,

@@ -109,7 +109,7 @@ fn read_blocking() -> Result<Vec<ClipboardItem>> {
     }
 
     for fmt in formats {
-        if fmt == CF_UNICODETEXT.0 as u32 {
+        if fmt == u32::from(CF_UNICODETEXT.0) {
             if let Some(text) = read_unicode_text() {
                 items.push(ClipboardItem::Text(text));
             }
@@ -132,7 +132,7 @@ fn read_blocking() -> Result<Vec<ClipboardItem>> {
             if let Some(png_bytes) = read_ascii_bytes(fmt) {
                 items.push(ClipboardItem::Png(png_bytes));
             }
-        } else if fmt == CF_HDROP.0 as u32 {
+        } else if fmt == u32::from(CF_HDROP.0) {
             if let Some(paths) = read_hdrop() {
                 items.push(ClipboardItem::FileList(paths));
             }
@@ -144,7 +144,7 @@ fn read_blocking() -> Result<Vec<ClipboardItem>> {
 fn read_unicode_text() -> Option<String> {
     // SAFETY: clipboard is open (caller responsibility).
     unsafe {
-        let h = GetClipboardData(CF_UNICODETEXT.0 as u32).ok()?;
+        let h = GetClipboardData(u32::from(CF_UNICODETEXT.0)).ok()?;
         let p = GlobalLock(HGLOBAL(h.0));
         if p.is_null() {
             return None;
@@ -181,7 +181,7 @@ fn read_hdrop() -> Option<Vec<String>> {
     use windows::Win32::UI::Shell::{DragQueryFileW, HDROP};
     // SAFETY: clipboard is open.
     unsafe {
-        let h = GetClipboardData(CF_HDROP.0 as u32).ok()?;
+        let h = GetClipboardData(u32::from(CF_HDROP.0)).ok()?;
         let hdrop = HDROP(h.0);
         let count = DragQueryFileW(hdrop, u32::MAX, None);
         let mut out = Vec::with_capacity(count as usize);
@@ -216,7 +216,7 @@ fn write_blocking(items: &[ClipboardItem]) -> Result<()> {
         match item {
             ClipboardItem::Text(s) => {
                 let wide: Vec<u16> = s.encode_utf16().chain(std::iter::once(0)).collect();
-                set_data(CF_UNICODETEXT.0 as u32, bytemuck_u16_to_bytes(&wide))?;
+                set_data(u32::from(CF_UNICODETEXT.0), bytemuck_u16_to_bytes(&wide))?;
             }
             ClipboardItem::Rtf(s) => {
                 let mut bytes = s.as_bytes().to_vec();
@@ -284,7 +284,7 @@ fn run_watcher_thread(
         wc.lpfnWndProc = Some(window_proc);
         wc.hInstance = windows::Win32::Foundation::HINSTANCE(hinstance.0);
         wc.lpszClassName = class_name;
-        let _ = RegisterClassW(&wc); // ok si deja enregistre
+        let _ = RegisterClassW(&raw const wc); // ok si deja enregistre
 
         let hwnd = match CreateWindowExW(
             WINDOW_EX_STYLE(0),
@@ -318,7 +318,7 @@ fn run_watcher_thread(
         // Pump messages.
         let mut msg = MSG::default();
         loop {
-            let r = GetMessageW(&mut msg, hwnd, 0, 0);
+            let r = GetMessageW(&raw mut msg, hwnd, 0, 0);
             if r.0 <= 0 {
                 break;
             }
@@ -330,8 +330,8 @@ fn run_watcher_thread(
                     }
                 }
             }
-            let _ = TranslateMessage(&msg);
-            DispatchMessageW(&msg);
+            let _ = TranslateMessage(&raw const msg);
+            DispatchMessageW(&raw const msg);
         }
 
         let _ = RemoveClipboardFormatListener(hwnd);

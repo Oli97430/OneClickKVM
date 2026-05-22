@@ -107,7 +107,7 @@ impl FileSender {
         }
 
         // Attend la fin de tous les threads en re-acquerant tous les permits.
-        let _ = sem.acquire_many_owned(self.threads as u32).await;
+        let _ = sem.acquire_many_owned(u32::from(self.threads)).await;
         // Notifie 100% final.
         if let Some(cb) = &self.on_progress {
             cb(total_bytes, total_bytes, "");

@@ -32,7 +32,7 @@ impl Timestamp {
     /// Différence en millisecondes (signée).
     #[must_use]
     pub fn delta_ms(self, other: Self) -> i64 {
-        (self.0 as i128 - other.0 as i128) as i64
+        (i128::from(self.0) - i128::from(other.0)) as i64
     }
 }
 

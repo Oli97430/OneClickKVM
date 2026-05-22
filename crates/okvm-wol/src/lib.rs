@@ -19,7 +19,7 @@ pub struct MacAddr(pub [u8; 6]);
 impl MacAddr {
     /// Parse un MAC string `aa:bb:cc:dd:ee:ff` ou `aa-bb-cc-dd-ee-ff`.
     pub fn parse(s: &str) -> Result<Self> {
-        let cleaned: Vec<&str> = s.split(|c| c == ':' || c == '-').collect();
+        let cleaned: Vec<&str> = s.split([':', '-']).collect();
         if cleaned.len() != 6 {
             return Err(Error::other(format!("MAC invalide: {s}")));
         }

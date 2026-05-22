@@ -114,7 +114,7 @@ fn build_beacon(a: &SelfAnnounce) -> DiscoveryBeacon {
 fn parse_and_filter(bytes: &[u8], src: SocketAddr, self_id: &DeviceId) -> Option<DiscoveredPeer> {
     // Filtre magic avant le decode complet.
     // bincode encode `[u8; 4]` via l'impl tuple = 4 octets bruts sans prefixe.
-    if bytes.len() < 4 || &bytes[..4] != &BEACON_MAGIC[..] {
+    if bytes.len() < 4 || bytes[..4] != BEACON_MAGIC[..] {
         return None;
     }
 

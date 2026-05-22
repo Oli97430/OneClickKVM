@@ -138,7 +138,7 @@ fn run_hook_thread(tx: std_mpsc::Sender<InputMessage>, tid_tx: std_mpsc::Sender<
     let hmod: HINSTANCE = unsafe {
         GetModuleHandleW(windows::core::PCWSTR::null())
             .map(|h| HINSTANCE(h.0))
-            .unwrap_or(HINSTANCE::default())
+            .unwrap_or_default()
     };
 
     // Installe les deux hooks. Note: avec hmod == NULL et un thread_id = 0,
@@ -171,7 +171,7 @@ fn run_hook_thread(tx: std_mpsc::Sender<InputMessage>, tid_tx: std_mpsc::Sender<
     unsafe {
         let mut msg = MSG::default();
         loop {
-            let r = GetMessageW(&mut msg, None, 0, 0);
+            let r = GetMessageW(&raw mut msg, None, 0, 0);
             if r.0 == 0 {
                 // WM_QUIT
                 break;
@@ -180,8 +180,8 @@ fn run_hook_thread(tx: std_mpsc::Sender<InputMessage>, tid_tx: std_mpsc::Sender<
                 tracing::error!("GetMessageW erreur");
                 break;
             }
-            let _ = TranslateMessage(&msg);
-            DispatchMessageW(&msg);
+            let _ = TranslateMessage(&raw const msg);
+            DispatchMessageW(&raw const msg);
         }
     }
 
@@ -283,8 +283,8 @@ unsafe extern "system" fn low_level_mouse_proc(
         WM_MOUSEMOVE => {
             let last_x = LAST_X.swap(x, Ordering::Relaxed);
             let last_y = LAST_Y.swap(y, Ordering::Relaxed);
-            let dx = (x - last_x).clamp(i16::MIN as i32, i16::MAX as i32) as i16;
-            let dy = (y - last_y).clamp(i16::MIN as i32, i16::MAX as i32) as i16;
+            let dx = (x - last_x).clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16;
+            let dy = (y - last_y).clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16;
             Some(InputMessage::MouseMove {
                 x_global: x,
                 y_global: y,
@@ -352,7 +352,7 @@ unsafe extern "system" fn low_level_mouse_proc(
             })
         }
         WM_MOUSEWHEEL => {
-            let delta = ((info.mouseData >> 16) as i16) as i32;
+            let delta = i32::from((info.mouseData >> 16) as i16);
             Some(InputMessage::MouseWheel {
                 delta_x: 0,
                 delta_y: delta,
@@ -361,7 +361,7 @@ unsafe extern "system" fn low_level_mouse_proc(
             })
         }
         WM_MOUSEHWHEEL => {
-            let delta = ((info.mouseData >> 16) as i16) as i32;
+            let delta = i32::from((info.mouseData >> 16) as i16);
             Some(InputMessage::MouseWheel {
                 delta_x: delta,
                 delta_y: 0,
@@ -404,8 +404,8 @@ fn current_modifiers() -> u16 {
         VK_SHIFT,
     };
     // SAFETY: GetKeyState est thread-safe.
-    let down = |vk: VIRTUAL_KEY| (unsafe { GetKeyState(vk.0 as i32) } as u16) & 0x8000 != 0;
-    let toggled = |vk: VIRTUAL_KEY| (unsafe { GetKeyState(vk.0 as i32) } as u16) & 0x0001 != 0;
+    let down = |vk: VIRTUAL_KEY| (unsafe { GetKeyState(i32::from(vk.0)) } as u16) & 0x8000 != 0;
+    let toggled = |vk: VIRTUAL_KEY| (unsafe { GetKeyState(i32::from(vk.0)) } as u16) & 0x0001 != 0;
     let mut m = 0u16;
     if down(VK_SHIFT) {
         m |= 1;

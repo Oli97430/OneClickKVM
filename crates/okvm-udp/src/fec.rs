@@ -119,7 +119,7 @@ impl FecCodec {
     /// où `None` indique un shard manquant.
     ///
     /// `original_len` est la taille du ciphertext avant padding (nécessaire car
-    /// le shard_size est `ceil(original_len/K)` mais on doit tronquer après
+    /// le `shard_size` est `ceil(original_len/K)` mais on doit tronquer après
     /// reconstitution).
     ///
     /// # Erreurs

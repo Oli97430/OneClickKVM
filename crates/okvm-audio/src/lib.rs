@@ -49,7 +49,7 @@ pub trait AudioPlayback: Send + Sync {
 pub struct AudioHandle {
     /// Signal d'arret (drop pour arreter).
     pub stop: tokio::sync::oneshot::Sender<()>,
-    /// JoinHandle de la task qui sert de pont vers tokio.
+    /// `JoinHandle` de la task qui sert de pont vers tokio.
     pub bridge: tokio::task::JoinHandle<()>,
 }
 

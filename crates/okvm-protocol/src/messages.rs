@@ -117,7 +117,7 @@ pub enum InputMessage {
         scancode: u16,
         /// Down/Up.
         state: ButtonState,
-        /// Bit étendu (touches du pavé numérique, AltGr...).
+        /// Bit étendu (touches du pavé numérique, `AltGr`...).
         extended: bool,
         /// Bitfield modificateurs (Shift=1, Ctrl=2, Alt=4, Win=8, CapsLock=16, NumLock=32).
         modifiers: u16,

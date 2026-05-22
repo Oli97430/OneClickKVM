@@ -69,7 +69,7 @@ pub type AclHook = Arc<
     dyn Fn(&okvm_protocol::handshake_msg::ClientHello) -> Result<(), RejectReason> + Send + Sync,
 >;
 
-/// Listener TCP de OneClick KVM.
+/// Listener TCP de `OneClick` KVM.
 pub struct Listener {
     cfg: ListenerConfig,
     identity: IdentityKeypair,

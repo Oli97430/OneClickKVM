@@ -68,14 +68,14 @@ pub enum SessionError {
 
 /// Handle de pilotage d'une session active.
 ///
-/// Contient le signal de shutdown et les JoinHandles. La methode pratique
+/// Contient le signal de shutdown et les `JoinHandles`. La methode pratique
 /// [`Session::shutdown_and_wait`] consomme la session entiere et libere
 /// tous les senders avant d'attendre — c'est l'API recommandee.
 #[derive(Debug)]
 pub struct SessionHandle {
     /// Annule toutes les tasks (writer, reader, heartbeat).
     pub shutdown: tokio::sync::oneshot::Sender<()>,
-    /// JoinHandles pour attendre la fin propre (debug/tests).
+    /// `JoinHandles` pour attendre la fin propre (debug/tests).
     pub tasks: Vec<JoinHandle<()>>,
 }
 
@@ -399,7 +399,7 @@ impl Session {
                                                 let _ = app_ctrl_recv_tx.send(m).await;
                                             }
                                             Err(e) => {
-                                                tracing::warn!(error = %e, "decode CtrlMessage")
+                                                tracing::warn!(error = %e, "decode CtrlMessage");
                                             }
                                         }
                                     }

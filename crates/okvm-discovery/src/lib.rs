@@ -1,4 +1,4 @@
-//! `okvm-discovery` — decouverte de pairs OneClick KVM sur le LAN.
+//! `okvm-discovery` — decouverte de pairs `OneClick` KVM sur le LAN.
 //!
 //! Deux mecanismes complementaires (cf. `docs/PROTOCOL.md` §5) :
 //!

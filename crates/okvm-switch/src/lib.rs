@@ -175,8 +175,8 @@ impl Grid {
                 continue;
             }
             let (cx, cy) = bb.center();
-            let dist = ((cx - px) as i64).pow(2) + ((cy - py) as i64).pow(2);
-            if best.map_or(true, |(_, d)| dist < d) {
+            let dist = i64::from(cx - px).pow(2) + i64::from(cy - py).pow(2);
+            if best.is_none_or(|(_, d)| dist < d) {
                 best = Some((p, dist));
             }
         }
@@ -239,7 +239,7 @@ impl SwitchEngine {
             current: None,
             last_edge_hit: None,
             cooldown: Duration::from_millis(80),
-            last_switch: Instant::now() - Duration::from_secs(60),
+            last_switch: Instant::now().checked_sub(Duration::from_secs(60)).unwrap(),
             hotkey_modifiers: 2 | 4 | 8,
         }
     }

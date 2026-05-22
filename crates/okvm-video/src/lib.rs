@@ -36,20 +36,15 @@ use okvm_protocol::VideoMessage;
 /// - `Openh264` : implémentation Cisco référence pure software, portable.
 /// - `MediaFoundation` : MFT Microsoft software (Windows-only). Souvent plus
 ///   rapide qu'openh264 grâce aux optimisations SSE/AVX. Le wrapper futur
-///   D3D11Manager (V3.3) basculera ce backend sur NVENC / Quick Sync / AMF
+///   `D3D11Manager` (V3.3) basculera ce backend sur NVENC / Quick Sync / AMF
 ///   sans changer l'API publique.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, Default)]
 pub enum H264Backend {
     /// Cisco openh264 (par défaut, portable).
+    #[default]
     Openh264,
     /// Microsoft Media Foundation H.264 MFT (Windows-only).
     MediaFoundation,
-}
-
-impl Default for H264Backend {
-    fn default() -> Self {
-        Self::Openh264
-    }
 }
 
 /// Trait pour la capture vidéo.
@@ -75,7 +70,7 @@ pub trait VideoRenderer: Send + Sync {
 pub struct VideoHandle {
     /// Signal d'arrêt.
     pub stop: tokio::sync::oneshot::Sender<()>,
-    /// JoinHandle de la task bridge.
+    /// `JoinHandle` de la task bridge.
     pub bridge: tokio::task::JoinHandle<()>,
 }
 

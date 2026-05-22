@@ -137,10 +137,10 @@ fn mouse_button(button: MouseButton, state: ButtonState) -> INPUT {
         (MouseButton::Right, ButtonState::Up) => (MOUSEEVENTF_RIGHTUP, 0),
         (MouseButton::Middle, ButtonState::Down) => (MOUSEEVENTF_MIDDLEDOWN, 0),
         (MouseButton::Middle, ButtonState::Up) => (MOUSEEVENTF_MIDDLEUP, 0),
-        (MouseButton::X1, ButtonState::Down) => (MOUSEEVENTF_XDOWN, XBUTTON1 as i32),
-        (MouseButton::X1, ButtonState::Up) => (MOUSEEVENTF_XUP, XBUTTON1 as i32),
-        (MouseButton::X2, ButtonState::Down) => (MOUSEEVENTF_XDOWN, XBUTTON2 as i32),
-        (MouseButton::X2, ButtonState::Up) => (MOUSEEVENTF_XUP, XBUTTON2 as i32),
+        (MouseButton::X1, ButtonState::Down) => (MOUSEEVENTF_XDOWN, i32::from(XBUTTON1)),
+        (MouseButton::X1, ButtonState::Up) => (MOUSEEVENTF_XUP, i32::from(XBUTTON1)),
+        (MouseButton::X2, ButtonState::Down) => (MOUSEEVENTF_XDOWN, i32::from(XBUTTON2)),
+        (MouseButton::X2, ButtonState::Up) => (MOUSEEVENTF_XUP, i32::from(XBUTTON2)),
     };
     INPUT {
         r#type: INPUT_MOUSE,
@@ -245,8 +245,8 @@ fn to_virtual_desktop_normalized(x: i32, y: i32) -> (i32, i32) {
         let cw = GetSystemMetrics(SM_CXVIRTUALSCREEN).max(1);
         let ch = GetSystemMetrics(SM_CYVIRTUALSCREEN).max(1);
         // f64 pour eviter overflow ; clamp 0..65535.
-        let nx = (((x - ox) as f64 / cw as f64) * 65535.0).round() as i32;
-        let ny = (((y - oy) as f64 / ch as f64) * 65535.0).round() as i32;
+        let nx = ((f64::from(x - ox) / f64::from(cw)) * 65535.0).round() as i32;
+        let ny = ((f64::from(y - oy) / f64::from(ch)) * 65535.0).round() as i32;
         (nx.clamp(0, 65535), ny.clamp(0, 65535))
     }
 }

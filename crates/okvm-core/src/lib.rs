@@ -1,4 +1,4 @@
-//! `okvm-core` — types et utilitaires partagés par toutes les crates OneClick KVM.
+//! `okvm-core` — types et utilitaires partagés par toutes les crates `OneClick` KVM.
 //!
 //! Cette crate **ne dépend d'aucune autre crate du workspace**. Elle expose :
 //!

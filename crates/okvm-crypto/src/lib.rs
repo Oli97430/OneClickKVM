@@ -1,4 +1,4 @@
-//! `okvm-crypto` — primitives cryptographiques de OneClick KVM.
+//! `okvm-crypto` — primitives cryptographiques de `OneClick` KVM.
 //!
 //! Cette crate fournit :
 //!

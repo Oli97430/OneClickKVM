@@ -2,7 +2,7 @@
 //!
 //! Le sink Windows Event Log utilise `ReportEventW` avec une source dediee
 //! `OneClickKVM` (a enregistrer via une installation de cle de registre lors
-//! du setup ; en l'absence de cle, ReportEventW journalise tout de meme sous
+//! du setup ; en l'absence de cle, `ReportEventW` journalise tout de meme sous
 //! la source mais avec un message generique).
 //!
 //! - **Aucun payload sensible** (frappes, cles, contenu clipboard) ne doit

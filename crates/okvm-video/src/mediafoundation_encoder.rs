@@ -16,8 +16,8 @@
 //!
 //! ## Pourquoi cette première étape est utile ?
 //!
-//! - Valide tout le plumbing COM/MF (CoInitialize, MFStartup, IMFSample,
-//!   IMFMediaBuffer, IMFTransform).
+//! - Valide tout le plumbing COM/MF (`CoInitialize`, `MFStartup`, `IMFSample`,
+//!   `IMFMediaBuffer`, `IMFTransform`).
 //! - Le MFT Microsoft est souvent plus rapide qu'openh264 grâce à ses
 //!   optimisations SSE/AVX.
 //! - Permet de tester la conversion RGB→NV12 (qui sera réutilisée tel quel
@@ -238,8 +238,11 @@ impl MfH264Encoder {
 
         // SAFETY: output_buffer pointe vers une struct valide.
         let res = unsafe {
-            self.transform
-                .ProcessOutput(0, std::slice::from_mut(&mut output_buffer), &mut status)
+            self.transform.ProcessOutput(
+                0,
+                std::slice::from_mut(&mut output_buffer),
+                &raw mut status,
+            )
         };
         // Drop manually-managed fields explicitly to relâcher les refs COM.
         let sample_back = unsafe { std::mem::ManuallyDrop::take(&mut output_buffer.pSample) };
@@ -287,7 +290,7 @@ impl MfH264Encoder {
     /// `START_OF_STREAM`.
     ///
     /// # Erreurs
-    /// Échec ProcessOutput.
+    /// Échec `ProcessOutput`.
     pub fn drain(&mut self) -> Result<Vec<u8>> {
         // SAFETY: transform valide.
         unsafe {
@@ -383,8 +386,12 @@ fn make_input_sample(nv12: &[u8], ts_hns: i64, dur_hns: i64) -> Result<IMFSample
         let mut ptr: *mut u8 = ptr::null_mut();
         let mut max_len: u32 = 0;
         let mut current_len: u32 = 0;
-        buf.Lock(&mut ptr, Some(&mut max_len), Some(&mut current_len))
-            .map_err(|e| Error::other(format!("Lock: {e}")))?;
+        buf.Lock(
+            &raw mut ptr,
+            Some(&raw mut max_len),
+            Some(&raw mut current_len),
+        )
+        .map_err(|e| Error::other(format!("Lock: {e}")))?;
         if ptr.is_null() || (max_len as usize) < nv12.len() {
             let _ = buf.Unlock();
             return Err(Error::other("buffer COM trop petit ou null"));
@@ -418,8 +425,12 @@ fn read_sample_bytes(sample: &IMFSample, out: &mut Vec<u8>) -> Result<()> {
         let mut ptr: *mut u8 = ptr::null_mut();
         let mut max_len: u32 = 0;
         let mut current_len: u32 = 0;
-        buf.Lock(&mut ptr, Some(&mut max_len), Some(&mut current_len))
-            .map_err(|e| Error::other(format!("Lock: {e}")))?;
+        buf.Lock(
+            &raw mut ptr,
+            Some(&raw mut max_len),
+            Some(&raw mut current_len),
+        )
+        .map_err(|e| Error::other(format!("Lock: {e}")))?;
         if ptr.is_null() {
             let _ = buf.Unlock();
             return Err(Error::other("buffer null en sortie"));

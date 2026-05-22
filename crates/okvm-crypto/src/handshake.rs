@@ -2,10 +2,10 @@
 //!
 //! Implémente la séquence décrite dans `docs/PROTOCOL.md` §2 :
 //!
-//! 1. **ClientHello** : nonce 32B, X25519 éphémère, Ed25519 identité, caps.
-//! 2. **ServerHello** : pareil + signature Ed25519 du transcript.
-//! 3. **ClientFinished** (chiffré) : signature Ed25519 du transcript final.
-//! 4. **ServerFinished** (chiffré) : accept/reject.
+//! 1. **`ClientHello`** : nonce 32B, X25519 éphémère, Ed25519 identité, caps.
+//! 2. **`ServerHello`** : pareil + signature Ed25519 du transcript.
+//! 3. **`ClientFinished`** (chiffré) : signature Ed25519 du transcript final.
+//! 4. **`ServerFinished`** (chiffré) : accept/reject.
 //!
 //! Cette crate ne s'occupe **que** du calcul cryptographique. La sérialisation
 //! des messages ([`PROTOCOL.md`]) et leur transmission TCP sont la
@@ -28,9 +28,9 @@ pub const TRANSCRIPT_HASH_SIZE: usize = 32;
 /// Rôle d'un participant au handshake.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HandshakeRole {
-    /// Initiateur (envoie ClientHello en premier).
+    /// Initiateur (envoie `ClientHello` en premier).
     Client,
-    /// Receveur (répond avec ServerHello).
+    /// Receveur (répond avec `ServerHello`).
     Server,
 }
 
@@ -142,7 +142,7 @@ impl HandshakeState {
         Self::new(HandshakeRole::Server, identity)
     }
 
-    /// Clé publique X25519 éphémère locale (à envoyer dans ClientHello / ServerHello).
+    /// Clé publique X25519 éphémère locale (à envoyer dans `ClientHello` / `ServerHello`).
     #[must_use]
     pub fn local_eph_public(&self) -> [u8; 32] {
         self.eph_public.to_bytes()
@@ -218,8 +218,8 @@ impl HandshakeState {
         Ok(())
     }
 
-    /// **Côté client** : intègre ClientHello dans le transcript (à appeler
-    /// juste après avoir sérialisé et envoyé ClientHello).
+    /// **Côté client** : intègre `ClientHello` dans le transcript (à appeler
+    /// juste après avoir sérialisé et envoyé `ClientHello`).
     pub fn feed_self_client_hello(
         &mut self,
         client_hello_bytes: &[u8],
@@ -315,7 +315,7 @@ impl HandshakeState {
     /// Finalise et produit les clés de session AEAD.
     ///
     /// Doit être appelée après que les deux côtés ont feed tout le transcript
-    /// (ClientHello, ServerHello+sig, ClientFinished, ServerFinished).
+    /// (`ClientHello`, ServerHello+sig, `ClientFinished`, `ServerFinished`).
     pub fn finalize(self) -> Result<SessionSecrets, HandshakeError> {
         let shared = self.shared.ok_or(HandshakeError::BadState(
             "shared secret manquant — compute_shared non appelé",
@@ -378,7 +378,7 @@ fn hex_short(b: &[u8]) -> String {
         use std::fmt::Write;
         let _ = write!(&mut s, "{byte:02x}");
     }
-    s.push_str("…");
+    s.push('…');
     s
 }
 
@@ -438,10 +438,10 @@ mod tests {
         // ===== ClientFinished (simulé : juste signature transcript) =====
         let cf_sig = client.sign_transcript();
         // Feed côté client
-        client.transcript.update(&cf_sig);
+        client.transcript.update(cf_sig);
         // Côté serveur : vérifie
         server.verify_remote_transcript_sig(&cf_sig).unwrap();
-        server.transcript.update(&cf_sig);
+        server.transcript.update(cf_sig);
 
         // ===== ServerFinished (simulé : payload "ok") =====
         let sf = b"ok";

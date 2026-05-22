@@ -20,3 +20,6 @@ audiopus.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows.workspace = true
+
+[lints]
+workspace = true
