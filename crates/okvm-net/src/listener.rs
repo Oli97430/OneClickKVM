@@ -10,13 +10,13 @@ use tokio::sync::mpsc;
 use okvm_core::{Capabilities, IdentityKeypair};
 use okvm_protocol::messages::RejectReason;
 
+use okvm_protocol::Channel;
+
 use crate::handshake::{drive_server, DriverError};
 use crate::session::Session;
 
 /// Identifiant du canal audio dans les `udp_ports` annoncés par le serveur.
-/// (Doit matcher `Channel::Audio as u8` mais on l'inline pour ne pas importer
-/// la dépendance ici.)
-const UDP_CHANNEL_AUDIO: u8 = 3;
+const UDP_CHANNEL_AUDIO: u8 = Channel::Audio as u8;
 
 /// Configuration du listener.
 #[derive(Debug, Clone)]

@@ -6,10 +6,13 @@ use std::time::Duration;
 use tokio::net::{TcpStream, UdpSocket};
 
 use okvm_core::{Capabilities, IdentityKeypair};
-use okvm_protocol::messages::ChannelDesc;
+use okvm_protocol::{messages::ChannelDesc, Channel};
 
 use crate::handshake::{drive_client, DriverError};
 use crate::session::Session;
+
+/// Identifiant du canal audio dans les `udp_ports` annoncés par le serveur.
+const UDP_CHANNEL_AUDIO: u8 = Channel::Audio as u8;
 
 /// Configuration d'un connector.
 #[derive(Debug, Clone)]
@@ -108,8 +111,11 @@ impl Connector {
         // émission. Best-effort : si bind échoue, audio retombera sur TCP.
         // (Le step 3 brancherait ce socket sur la Session ; pour l'instant
         // on logge juste l'établissement réussi.)
-        if let Some((_chan, server_udp_port)) =
-            outcome.udp_ports.iter().find(|(ch, _)| *ch == 3).copied()
+        if let Some((_chan, server_udp_port)) = outcome
+            .udp_ports
+            .iter()
+            .find(|(ch, _)| *ch == UDP_CHANNEL_AUDIO)
+            .copied()
         {
             let server_udp_addr = SocketAddr::new(self.cfg.remote.ip(), server_udp_port);
             let bind_local_ip = match self.cfg.remote {
