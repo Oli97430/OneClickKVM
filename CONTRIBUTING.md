@@ -10,6 +10,9 @@ Merci de votre intérêt pour le projet ! Ce guide couvre l'essentiel.
 - **Windows 10/11 x64** (build natif uniquement pour l'instant — cf. roadmap
   pour le support macOS/Linux)
 - **Windows SDK** (pour `signtool.exe` lors des releases)
+- (Optionnel) **just** task runner — `winget install Casey.Just` ou
+  `cargo install just`. Donne accès aux commandes du `justfile`
+  (`just dev`, `just test`, `just ci-local`, …).
 
 ## Premier setup
 
@@ -34,8 +37,10 @@ pnpm tauri build
 1. **Fork + branche** : `git checkout -b feat/ma-feature` (ou `fix/...`,
    `docs/...`, `refactor/...`)
 2. **Code + tests** : ajoutez/modifiez les tests pour couvrir le changement
-3. **Vérifs locales** **obligatoires** :
+3. **Vérifs locales** **obligatoires** (le `justfile` à la racine raccourcit) :
    ```powershell
+   just ci-local         # fait tout en une commande
+   # OU manuellement :
    cargo fmt --all
    cargo clippy --workspace --all-targets -- -D warnings
    cargo test --workspace
