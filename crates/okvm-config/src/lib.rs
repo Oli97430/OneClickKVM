@@ -322,20 +322,6 @@ fn detect_language() -> String {
     map_supported(&lang)
 }
 
-#[cfg(not(windows))]
-fn detect_language() -> String {
-    // Fallback : lit `LANG` / `LC_ALL` POSIX.
-    let raw = std::env::var("LC_ALL")
-        .or_else(|_| std::env::var("LANG"))
-        .unwrap_or_default();
-    let lang = raw
-        .split(|c: char| c == '_' || c == '.' || c == '-')
-        .next()
-        .unwrap_or("")
-        .to_ascii_lowercase();
-    map_supported(&lang)
-}
-
 /// Mappe un préfixe de langue 2-lettres vers une de nos langues supportées,
 /// avec fallback `"en"`.
 fn map_supported(lang: &str) -> String {

@@ -407,11 +407,6 @@ fn open_in_explorer(path: &std::path::Path) -> Result<(), String> {
         .map_err(|e| format!("explorer.exe: {e}"))
 }
 
-#[cfg(not(windows))]
-fn open_in_explorer(_path: &std::path::Path) -> Result<(), String> {
-    Err("open_in_explorer: implémenté uniquement sur Windows".into())
-}
-
 /// Infos systeme / build pour le panneau A propos.
 #[tauri::command]
 pub async fn get_about_info(state: State<'_, AppState>) -> Result<AboutInfo, String> {

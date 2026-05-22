@@ -50,7 +50,6 @@ body:
         - Sécurité / appairage
         - UI / UX
         - Performance
-        - Cross-platform (macOS / Linux)
         - Documentation
         - Autre
     validations:

@@ -7,8 +7,7 @@ Merci de votre intérêt pour le projet ! Ce guide couvre l'essentiel.
 - **Rust stable 1.80+** avec toolchain MSVC :
   `rustup default stable-x86_64-pc-windows-msvc`
 - **Node.js 22+** et **pnpm 10+** (`npm i -g pnpm@10`)
-- **Windows 10/11 x64** (build natif uniquement pour l'instant — cf. roadmap
-  pour le support macOS/Linux)
+- **Windows 10/11 x64** uniquement (projet Windows-only par design, cf. README)
 - **Windows SDK** (pour `signtool.exe` lors des releases)
 - (Optionnel) **just** task runner — `winget install Casey.Just` ou
   `cargo install just`. Donne accès aux commandes du `justfile`

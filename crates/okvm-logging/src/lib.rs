@@ -27,23 +27,12 @@ pub fn init_default() {
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default_level()));
 
     let fmt_layer = fmt::layer().with_target(true).with_level(true).json();
-
-    #[cfg(windows)]
-    {
-        let event_log = event_log::EventLogLayer::new(EVENT_SOURCE);
-        let _ = tracing_subscriber::registry()
-            .with(filter)
-            .with(fmt_layer)
-            .with(event_log)
-            .try_init();
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = tracing_subscriber::registry()
-            .with(filter)
-            .with(fmt_layer)
-            .try_init();
-    }
+    let event_log = event_log::EventLogLayer::new(EVENT_SOURCE);
+    let _ = tracing_subscriber::registry()
+        .with(filter)
+        .with(fmt_layer)
+        .with(event_log)
+        .try_init();
 }
 
 fn default_level() -> &'static str {

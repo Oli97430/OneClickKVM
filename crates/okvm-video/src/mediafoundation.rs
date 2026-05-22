@@ -68,12 +68,6 @@ pub fn ensure_mf_init() -> std::result::Result<(), String> {
     .clone()
 }
 
-/// Variante no-op pour les builds non-Windows.
-#[cfg(not(windows))]
-pub fn ensure_mf_init() -> std::result::Result<(), String> {
-    Ok(())
-}
-
 /// Description d'un encodeur H.264 détecté.
 #[derive(Debug, Clone)]
 pub struct H264EncoderInfo {
@@ -144,11 +138,6 @@ pub fn enumerate_h264_encoders() -> Result<Vec<H264EncoderInfo>, String> {
         }
     }
     Ok(out)
-}
-
-#[cfg(not(windows))]
-pub fn enumerate_h264_encoders() -> Result<Vec<H264EncoderInfo>, String> {
-    Ok(Vec::new())
 }
 
 /// `true` si au moins un encodeur **hardware** H.264 est disponible.
@@ -230,13 +219,6 @@ pub fn log_hardware_h264_status() {
 }
 
 /// Pour usage par les bindings Tauri : libre de référencer le `GUID`.
-/// Évite que rustc ne purge l'import inutilisé en cfg non-windows.
-#[cfg(not(windows))]
-#[allow(dead_code)]
-const _: () = {
-    let _ = std::any::TypeId::of::<()>;
-};
-
 #[cfg(test)]
 #[cfg(windows)]
 mod tests {

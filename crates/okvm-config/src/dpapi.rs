@@ -103,19 +103,7 @@ pub fn unprotect(cipher: &[u8]) -> Result<Vec<u8>> {
     }
 }
 
-#[cfg(not(windows))]
-pub fn protect(plain: &[u8]) -> Result<Vec<u8>> {
-    // Fallback no-op pour les autres OS (a remplacer par equivalent platform).
-    Ok(plain.to_vec())
-}
-
-#[cfg(not(windows))]
-pub fn unprotect(cipher: &[u8]) -> Result<Vec<u8>> {
-    Ok(cipher.to_vec())
-}
-
 #[cfg(test)]
-#[cfg(windows)]
 mod tests {
     use super::*;
 

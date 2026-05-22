@@ -177,8 +177,13 @@ Version actuelle : **0.1.1** (alpha, prêt pour usage personnel sur LAN de confi
 - [ ] UDP + Reed-Solomon FEC pour audio/vidéo (latence p99 < 30ms cible)
 - [ ] Code signing Authenticode (élimine le warning SmartScreen)
 - [ ] Auto-update Tauri (delta updates depuis GitHub releases)
-- [ ] PIN flow strict côté serveur (validation `pairing_pin_hash`)
-- [ ] Compatibilité macOS et Linux (refonte des modules input/audio/video)
+
+> **Scope** : OneClick KVM est **Windows-only par design**. Le code s'appuie
+> en profondeur sur Win32 (DPAPI, WH_KEYBOARD_LL, SendInput, WASAPI loopback,
+> Windows Graphics Capture, Media Foundation). Un portage macOS/Linux n'est
+> **pas** prévu — les besoins KVM cross-OS sont déjà très bien couverts par
+> [Barrier](https://github.com/debauchee/barrier) ou
+> [Input Leap](https://github.com/input-leap/input-leap).
 
 ## Licence
 
