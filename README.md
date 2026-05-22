@@ -155,9 +155,14 @@ Résumé :
   globaux fonctionnent sans élévation (limitation : pas d'interception
   pour fenêtres élevées par UAC).
 
+## Dépannage
+
+Problèmes courants → [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
+(découverte LAN, pairing, capture clavier, audio crépitement, SmartScreen).
+
 ## Statut
 
-Version actuelle : **0.1.0** (alpha, prêt pour usage personnel sur LAN de confiance).
+Version actuelle : **0.1.1** (alpha, prêt pour usage personnel sur LAN de confiance).
 
 - ✅ 30+ fonctionnalités implémentées (KM, audio, vidéo, fichiers, clipboard, WoL, etc.)
 - ✅ 62 tests unitaires + intégration passants

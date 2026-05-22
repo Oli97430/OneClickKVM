@@ -1,0 +1,26 @@
+# CODEOWNERS — auto-assigne le mainteneur à toute PR.
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# Format : <pattern> <owner> [<owner>...]
+# Le dernier match l'emporte. Patterns relatifs à la racine du repo.
+
+# Tout par défaut au mainteneur du repo.
+*       @Oli97430
+
+# Sécurité : revue obligatoire sur crypto, identité, ACL, handshake, PIN
+/crates/okvm-crypto/      @Oli97430
+/crates/okvm-config/src/dpapi.rs  @Oli97430
+/crates/okvm-net/src/handshake.rs @Oli97430
+/crates/okvm-net/src/listener.rs  @Oli97430
+/app/src-tauri/src/state.rs       @Oli97430
+/SECURITY.md             @Oli97430
+/docs/SECURITY.md        @Oli97430
+
+# CI / Build / Release : protéger les workflows
+/.github/workflows/      @Oli97430
+/scripts/release.ps1     @Oli97430
+/docs/RELEASE.md         @Oli97430
+
+# Protocole : changements breaking sensibles
+/crates/okvm-protocol/   @Oli97430
+/docs/PROTOCOL.md        @Oli97430
