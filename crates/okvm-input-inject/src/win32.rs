@@ -16,8 +16,8 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     VIRTUAL_KEY,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetSystemMetrics, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN,
-    SM_YVIRTUALSCREEN, XBUTTON1, XBUTTON2,
+    GetSystemMetrics, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN,
+    XBUTTON1, XBUTTON2,
 };
 
 /// Tag arbitraire ecrit dans `dwExtraInfo` pour identifier nos propres
@@ -47,14 +47,26 @@ impl InputInject for Win32Inject {
 
 fn inject_blocking(msg: InputMessage) -> Result<()> {
     let inputs = match msg {
-        InputMessage::MouseMove { x_global, y_global, .. } => {
+        InputMessage::MouseMove {
+            x_global, y_global, ..
+        } => {
             vec![mouse_move(x_global, y_global)]
         }
-        InputMessage::MouseButton { button, state, x, y } => {
+        InputMessage::MouseButton {
+            button,
+            state,
+            x,
+            y,
+        } => {
             // Position d'abord, puis click.
             vec![mouse_move(x, y), mouse_button(button, state)]
         }
-        InputMessage::MouseWheel { delta_x, delta_y, x, y } => {
+        InputMessage::MouseWheel {
+            delta_x,
+            delta_y,
+            x,
+            y,
+        } => {
             let mut v = vec![mouse_move(x, y)];
             if delta_y != 0 {
                 v.push(mouse_wheel(delta_y, false));
@@ -65,7 +77,11 @@ fn inject_blocking(msg: InputMessage) -> Result<()> {
             v
         }
         InputMessage::KeyEvent {
-            vk, scancode, state, extended, ..
+            vk,
+            scancode,
+            state,
+            extended,
+            ..
         } => {
             vec![key_event(vk, scancode, state, extended)]
         }

@@ -81,16 +81,8 @@ pub fn unprotect(cipher: &[u8]) -> Result<Vec<u8>> {
 
     // SAFETY: identique a protect ; on libere out_blob.pbData via LocalFree.
     unsafe {
-        CryptUnprotectData(
-            &mut in_blob,
-            None,
-            None,
-            None,
-            None,
-            0,
-            &mut out_blob,
-        )
-        .map_err(|e| Error::Crypto(format!("CryptUnprotectData: {e}")))?;
+        CryptUnprotectData(&mut in_blob, None, None, None, None, 0, &mut out_blob)
+            .map_err(|e| Error::Crypto(format!("CryptUnprotectData: {e}")))?;
 
         if out_blob.pbData.is_null() || out_blob.cbData == 0 {
             return Err(Error::Crypto("CryptUnprotectData output vide".into()));

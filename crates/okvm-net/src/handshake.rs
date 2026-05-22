@@ -89,8 +89,8 @@ where
 {
     let bytes = bincode::serde::encode_to_vec(msg, bincode_cfg())
         .map_err(|e| DriverError::Codec(e.to_string()))?;
-    let len = u32::try_from(bytes.len())
-        .map_err(|_| DriverError::Codec("message > u32::MAX".into()))?;
+    let len =
+        u32::try_from(bytes.len()).map_err(|_| DriverError::Codec("message > u32::MAX".into()))?;
     w.write_all(&len.to_be_bytes()).await?;
     w.write_all(&bytes).await?;
     w.flush().await?;
@@ -202,7 +202,13 @@ where
 {
     timeout(
         handshake_timeout,
-        drive_client_inner(stream, identity, capabilities, desired_channels, pairing_pin),
+        drive_client_inner(
+            stream,
+            identity,
+            capabilities,
+            desired_channels,
+            pairing_pin,
+        ),
     )
     .await
     .map_err(|_| DriverError::Timeout)?
@@ -255,7 +261,10 @@ where
         return Err(DriverError::BadMagic);
     }
     if sh.protocol_version != PROTOCOL_VERSION {
-        return Err(DriverError::BadVersion(sh.protocol_version, PROTOCOL_VERSION));
+        return Err(DriverError::BadVersion(
+            sh.protocol_version,
+            PROTOCOL_VERSION,
+        ));
     }
     // unsigned_len = total - 64 octets sig. Le varint 0x40 est en `unsigned_len - 1`,
     // mais on inclut ce varint dans la partie "unsigned" pour rester coherent avec
@@ -302,8 +311,9 @@ where
 
     // === 5. ServerFinished (chiffre) ===
     let sf_plain = recv_encrypted_msg(stream, &mut aead_recv, Channel::Ctrl).await?;
-    let (sf, _): (ServerFinished, usize) = bincode::serde::decode_from_slice(&sf_plain, bincode_cfg())
-        .map_err(|e| DriverError::Codec(e.to_string()))?;
+    let (sf, _): (ServerFinished, usize) =
+        bincode::serde::decode_from_slice(&sf_plain, bincode_cfg())
+            .map_err(|e| DriverError::Codec(e.to_string()))?;
     if !sf.accepted {
         return Err(DriverError::Rejected(sf.reason));
     }
@@ -363,7 +373,10 @@ where
         return Err(DriverError::BadMagic);
     }
     if ch.protocol_version != PROTOCOL_VERSION {
-        return Err(DriverError::BadVersion(ch.protocol_version, PROTOCOL_VERSION));
+        return Err(DriverError::BadVersion(
+            ch.protocol_version,
+            PROTOCOL_VERSION,
+        ));
     }
     let decision = accept_predicate(&ch);
     hs.recv_client_hello(&ch_bytes, ch.ephemeral_pub, ch.identity_pub)?;
@@ -407,8 +420,9 @@ where
 
     // === 4. ClientFinished (chiffre) ===
     let cf_plain = recv_encrypted_msg(stream, &mut aead_recv, Channel::Ctrl).await?;
-    let (cf, _): (ClientFinished, usize) = bincode::serde::decode_from_slice(&cf_plain, bincode_cfg())
-        .map_err(|e| DriverError::Codec(e.to_string()))?;
+    let (cf, _): (ClientFinished, usize) =
+        bincode::serde::decode_from_slice(&cf_plain, bincode_cfg())
+            .map_err(|e| DriverError::Codec(e.to_string()))?;
     hs.verify_remote_transcript_sig(&cf.transcript_signature)?;
 
     // === 5. ServerFinished (chiffre) ===

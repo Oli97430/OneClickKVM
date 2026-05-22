@@ -58,10 +58,7 @@ impl FecCodec {
     /// # Erreurs
     /// Renvoie [`FecError::BadParams`] si les paramètres sont hors bornes.
     pub fn new(data_shards: usize, parity_shards: usize) -> Result<Self, FecError> {
-        if data_shards == 0
-            || data_shards > MAX_DATA_SHARDS
-            || parity_shards > MAX_PARITY_SHARDS
-        {
+        if data_shards == 0 || data_shards > MAX_DATA_SHARDS || parity_shards > MAX_PARITY_SHARDS {
             return Err(FecError::BadParams {
                 data: data_shards,
                 parity: parity_shards,
@@ -134,10 +131,7 @@ impl FecCodec {
     ) -> Result<Vec<u8>, FecError> {
         let got = shards.iter().filter(|s| s.is_some()).count();
         if got < self.k {
-            return Err(FecError::Insufficient {
-                got,
-                need: self.k,
-            });
+            return Err(FecError::Insufficient { got, need: self.k });
         }
         self.rs
             .reconstruct_data(shards)
@@ -150,9 +144,9 @@ impl FecCodec {
             .ok_or_else(|| FecError::Internal("aucun shard après reconstruct".into()))?;
         let mut out = Vec::with_capacity(self.k * shard_size);
         for opt in shards.iter().take(self.k) {
-            let s = opt
-                .as_ref()
-                .ok_or_else(|| FecError::Internal("shard data manquant après reconstruct".into()))?;
+            let s = opt.as_ref().ok_or_else(|| {
+                FecError::Internal("shard data manquant après reconstruct".into())
+            })?;
             out.extend_from_slice(s);
         }
         out.truncate(original_len);

@@ -13,9 +13,7 @@ use std::collections::HashMap;
 use parking_lot::RwLock;
 
 /// Langues supportées par OneClick KVM.
-pub const SUPPORTED_LANGUAGES: &[&str] = &[
-    "fr", "en", "de", "es", "it", "pt", "nl", "ja", "zh",
-];
+pub const SUPPORTED_LANGUAGES: &[&str] = &["fr", "en", "de", "es", "it", "pt", "nl", "ja", "zh"];
 
 /// Catalogue de traductions pour une langue donnée.
 #[derive(Debug, Default, Clone)]

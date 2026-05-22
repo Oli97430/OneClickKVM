@@ -28,17 +28,16 @@
 use std::ptr;
 
 use windows::core::GUID;
-use windows::Win32::Media::MediaFoundation::{
-    IMFMediaType, IMFSample, IMFTransform, MFCreateMediaType, MFCreateMemoryBuffer,
-    MFCreateSample, MFVideoFormat_H264, MFVideoFormat_NV12, MFVideoInterlace_Progressive,
-    MF_E_TRANSFORM_NEED_MORE_INPUT, MF_MT_AVG_BITRATE, MF_MT_FRAME_RATE, MF_MT_FRAME_SIZE,
-    MF_MT_INTERLACE_MODE, MF_MT_MAJOR_TYPE, MF_MT_MPEG2_PROFILE, MF_MT_PIXEL_ASPECT_RATIO,
-    MF_MT_SUBTYPE, MFMediaType_Video, MFT_MESSAGE_COMMAND_DRAIN,
-    MFT_MESSAGE_COMMAND_FLUSH, MFT_MESSAGE_NOTIFY_BEGIN_STREAMING,
-    MFT_MESSAGE_NOTIFY_END_OF_STREAM, MFT_MESSAGE_NOTIFY_START_OF_STREAM, MFT_OUTPUT_DATA_BUFFER,
-    MFT_OUTPUT_STREAM_INFO,
-};
 use windows::Win32::Media::MediaFoundation::eAVEncH264VProfile_Main;
+use windows::Win32::Media::MediaFoundation::{
+    IMFMediaType, IMFSample, IMFTransform, MFCreateMediaType, MFCreateMemoryBuffer, MFCreateSample,
+    MFMediaType_Video, MFVideoFormat_H264, MFVideoFormat_NV12, MFVideoInterlace_Progressive,
+    MFT_MESSAGE_COMMAND_DRAIN, MFT_MESSAGE_COMMAND_FLUSH, MFT_MESSAGE_NOTIFY_BEGIN_STREAMING,
+    MFT_MESSAGE_NOTIFY_END_OF_STREAM, MFT_MESSAGE_NOTIFY_START_OF_STREAM, MFT_OUTPUT_DATA_BUFFER,
+    MFT_OUTPUT_STREAM_INFO, MF_E_TRANSFORM_NEED_MORE_INPUT, MF_MT_AVG_BITRATE, MF_MT_FRAME_RATE,
+    MF_MT_FRAME_SIZE, MF_MT_INTERLACE_MODE, MF_MT_MAJOR_TYPE, MF_MT_MPEG2_PROFILE,
+    MF_MT_PIXEL_ASPECT_RATIO, MF_MT_SUBTYPE,
+};
 use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_INPROC_SERVER};
 
 use crate::mediafoundation::ensure_mf_init;
@@ -126,8 +125,7 @@ impl MfH264Encoder {
         // Pré-alloue le buffer NV12 (taille = 1.5 * width * height).
         let nv12_size = (cfg.width as usize) * (cfg.height as usize) * 3 / 2;
         // 100 ns ticks par frame.
-        let frame_duration_hns =
-            (10_000_000_i64 / i64::from(cfg.target_fps.max(1))).max(1);
+        let frame_duration_hns = (10_000_000_i64 / i64::from(cfg.target_fps.max(1))).max(1);
 
         Ok(Self {
             cfg,
@@ -329,18 +327,16 @@ impl Drop for MfH264Encoder {
 fn create_output_type_h264(cfg: &H264Config) -> Result<IMFMediaType> {
     // SAFETY: appels MF stockent les attributs dans l'IMFMediaType retourné.
     unsafe {
-        let mt = MFCreateMediaType().map_err(|e| Error::other(format!("MFCreateMediaType: {e}")))?;
+        let mt =
+            MFCreateMediaType().map_err(|e| Error::other(format!("MFCreateMediaType: {e}")))?;
         mt.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video)
             .map_err(|e| Error::other(format!("SetGUID(MAJOR_TYPE): {e}")))?;
         mt.SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_H264)
             .map_err(|e| Error::other(format!("SetGUID(SUBTYPE): {e}")))?;
         mt.SetUINT32(&MF_MT_AVG_BITRATE, cfg.bitrate_kbps * 1000)
             .map_err(|e| Error::other(format!("SetUINT32(AVG_BITRATE): {e}")))?;
-        mt.SetUINT32(
-            &MF_MT_INTERLACE_MODE,
-            MFVideoInterlace_Progressive.0 as u32,
-        )
-        .map_err(|e| Error::other(format!("SetUINT32(INTERLACE): {e}")))?;
+        mt.SetUINT32(&MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive.0 as u32)
+            .map_err(|e| Error::other(format!("SetUINT32(INTERLACE): {e}")))?;
         mt.SetUINT64(&MF_MT_FRAME_SIZE, pack_u64(cfg.width, cfg.height))
             .map_err(|e| Error::other(format!("SetUINT64(FRAME_SIZE): {e}")))?;
         mt.SetUINT64(&MF_MT_FRAME_RATE, pack_u64(cfg.target_fps, 1))
@@ -355,16 +351,14 @@ fn create_output_type_h264(cfg: &H264Config) -> Result<IMFMediaType> {
 
 fn create_input_type_nv12(cfg: &H264Config) -> Result<IMFMediaType> {
     unsafe {
-        let mt = MFCreateMediaType().map_err(|e| Error::other(format!("MFCreateMediaType: {e}")))?;
+        let mt =
+            MFCreateMediaType().map_err(|e| Error::other(format!("MFCreateMediaType: {e}")))?;
         mt.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video)
             .map_err(|e| Error::other(format!("SetGUID(MAJOR_TYPE): {e}")))?;
         mt.SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_NV12)
             .map_err(|e| Error::other(format!("SetGUID(SUBTYPE NV12): {e}")))?;
-        mt.SetUINT32(
-            &MF_MT_INTERLACE_MODE,
-            MFVideoInterlace_Progressive.0 as u32,
-        )
-        .map_err(|e| Error::other(format!("SetUINT32(INTERLACE): {e}")))?;
+        mt.SetUINT32(&MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive.0 as u32)
+            .map_err(|e| Error::other(format!("SetUINT32(INTERLACE): {e}")))?;
         mt.SetUINT64(&MF_MT_FRAME_SIZE, pack_u64(cfg.width, cfg.height))
             .map_err(|e| Error::other(format!("SetUINT64(FRAME_SIZE): {e}")))?;
         mt.SetUINT64(&MF_MT_FRAME_RATE, pack_u64(cfg.target_fps, 1))
@@ -535,7 +529,10 @@ mod tests {
         }
         let tail = enc.drain().unwrap();
         accumulated.extend_from_slice(&tail);
-        assert!(!accumulated.is_empty(), "aucun NAL produit après 60 frames + drain");
+        assert!(
+            !accumulated.is_empty(),
+            "aucun NAL produit après 60 frames + drain"
+        );
         // Vérifie un start code Annex-B.
         let has_start = accumulated.windows(4).any(|w| w == [0, 0, 0, 1])
             || accumulated.windows(3).any(|w| w == [0, 0, 1]);
@@ -551,6 +548,10 @@ mod tests {
         assert!(out[0] >= 120 && out[0] <= 130, "Y={}", out[0]);
         // Premier UV byte (U) ≈ 128.
         let uv_start = 320 * 240;
-        assert!(out[uv_start] >= 125 && out[uv_start] <= 131, "U={}", out[uv_start]);
+        assert!(
+            out[uv_start] >= 125 && out[uv_start] <= 131,
+            "U={}",
+            out[uv_start]
+        );
     }
 }

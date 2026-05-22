@@ -30,6 +30,6 @@ pub use handshake_msg::{
     ClientFinished, ClientHello, ServerFinished, ServerHello, HANDSHAKE_MAGIC,
 };
 pub use messages::{
-    AudioMessage, ChannelDesc, ClipboardItem, Compression, CtrlMessage, DiscoveryBeacon,
-    FileEntry, FileMessage, InputMessage, KeyframeReason, RejectReason, Transport, VideoMessage,
+    AudioMessage, ChannelDesc, ClipboardItem, Compression, CtrlMessage, DiscoveryBeacon, FileEntry,
+    FileMessage, InputMessage, KeyframeReason, RejectReason, Transport, VideoMessage,
 };

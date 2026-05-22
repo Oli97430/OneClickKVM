@@ -8,9 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use okvm_core::Capabilities;
 
-use crate::serde_helpers::{
-    bytes32, bytes4, bytes64, opt_bytes32,
-};
+use crate::serde_helpers::{bytes32, bytes4, bytes64, opt_bytes32};
 
 /// Magic constant en tête des Hello : permet de rejeter rapidement les paquets erronés.
 pub const HANDSHAKE_MAGIC: [u8; 4] = *b"OCKV";

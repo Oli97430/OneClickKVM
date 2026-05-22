@@ -44,10 +44,7 @@ impl FileSender {
 
     /// Attache un callback de progression appele a chaque chunk envoye.
     #[must_use]
-    pub fn with_progress(
-        mut self,
-        cb: impl Fn(u64, u64, &str) + Send + Sync + 'static,
-    ) -> Self {
+    pub fn with_progress(mut self, cb: impl Fn(u64, u64, &str) + Send + Sync + 'static) -> Self {
         self.on_progress = Some(std::sync::Arc::new(cb));
         self
     }
@@ -158,7 +155,8 @@ async fn send_one_file(
             .map_err(|_| Error::other("canal ferme"))?;
         offset += n as u64;
         // Met a jour le compteur global et notifie (throttle simple : a chaque chunk).
-        let done_now = bytes_done.fetch_add(n as u64, std::sync::atomic::Ordering::Relaxed) + n as u64;
+        let done_now =
+            bytes_done.fetch_add(n as u64, std::sync::atomic::Ordering::Relaxed) + n as u64;
         if let Some(cb) = &on_progress {
             cb(done_now, bytes_total, &entry.rel_path);
         }

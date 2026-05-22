@@ -61,8 +61,8 @@
 
 mod fec;
 mod framing;
-mod sender;
 mod receiver;
+mod sender;
 
 pub use fec::{FecCodec, FecError, MAX_DATA_SHARDS, MAX_PARITY_SHARDS};
 pub use framing::{ShardHeader, HEADER_LEN, MAX_SHARD_PAYLOAD};

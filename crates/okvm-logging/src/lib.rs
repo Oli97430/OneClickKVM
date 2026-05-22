@@ -23,12 +23,10 @@ const EVENT_SOURCE: &str = "OneClickKVM";
 /// niveaux WARN/ERROR (les niveaux inferieurs alourdiraient inutilement le
 /// journal Windows).
 pub fn init_default() {
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default_level()));
+    let filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default_level()));
 
-    let fmt_layer = fmt::layer()
-        .with_target(true)
-        .with_level(true)
-        .json();
+    let fmt_layer = fmt::layer().with_target(true).with_level(true).json();
 
     #[cfg(windows)]
     {
@@ -90,7 +88,8 @@ pub mod event_log {
 
         fn ensure_handle(&self) {
             self.init.call_once(|| {
-                let h = unsafe { RegisterEventSourceW(PCWSTR::null(), PCWSTR(self.source.as_ptr())) };
+                let h =
+                    unsafe { RegisterEventSourceW(PCWSTR::null(), PCWSTR(self.source.as_ptr())) };
                 match h {
                     Ok(handle) => {
                         *self.handle.lock() = Some(handle.0 as isize);

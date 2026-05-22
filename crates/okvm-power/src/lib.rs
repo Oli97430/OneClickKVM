@@ -47,6 +47,8 @@ pub mod win32 {
     use super::{async_trait, PowerAction, PowerControl, Result};
 
     use okvm_core::Error;
+    use windows::core::PCWSTR;
+    use windows::Win32::System::Shutdown::LockWorkStation;
     use windows::Win32::{
         Foundation::{HANDLE, LUID},
         Security::{
@@ -56,14 +58,11 @@ pub mod win32 {
         System::{
             Power::SetSuspendState,
             Shutdown::{
-                ExitWindowsEx, EWX_FORCEIFHUNG, EWX_REBOOT, EWX_SHUTDOWN,
-                SHTDN_REASON_MAJOR_OTHER,
+                ExitWindowsEx, EWX_FORCEIFHUNG, EWX_REBOOT, EWX_SHUTDOWN, SHTDN_REASON_MAJOR_OTHER,
             },
             Threading::{GetCurrentProcess, OpenProcessToken},
         },
     };
-    use windows::core::PCWSTR;
-    use windows::Win32::System::Shutdown::LockWorkStation;
 
     /// Implementation Win32.
     pub struct Win32Power;
@@ -83,8 +82,7 @@ pub mod win32 {
             PowerAction::LockWorkstation => unsafe {
                 // SAFETY: LockWorkStation est une API Win32 thread-safe et sans
                 // precondition (au-dela de "il y a une session interactive").
-                LockWorkStation()
-                    .map_err(|e| Error::Os(format!("LockWorkStation: {e}")))?;
+                LockWorkStation().map_err(|e| Error::Os(format!("LockWorkStation: {e}")))?;
                 Ok(())
             },
             PowerAction::Sleep => unsafe {
@@ -111,21 +109,15 @@ pub mod win32 {
                 // ExitWindowsEx sans privilege renvoie une erreur que l'on
                 // remonte proprement.
                 enable_shutdown_privilege()?;
-                ExitWindowsEx(
-                    EWX_REBOOT | EWX_FORCEIFHUNG,
-                    SHTDN_REASON_MAJOR_OTHER,
-                )
-                .map_err(|e| Error::Os(format!("ExitWindowsEx(Restart): {e}")))?;
+                ExitWindowsEx(EWX_REBOOT | EWX_FORCEIFHUNG, SHTDN_REASON_MAJOR_OTHER)
+                    .map_err(|e| Error::Os(format!("ExitWindowsEx(Restart): {e}")))?;
                 Ok(())
             },
             PowerAction::Shutdown => unsafe {
                 // SAFETY: idem Restart.
                 enable_shutdown_privilege()?;
-                ExitWindowsEx(
-                    EWX_SHUTDOWN | EWX_FORCEIFHUNG,
-                    SHTDN_REASON_MAJOR_OTHER,
-                )
-                .map_err(|e| Error::Os(format!("ExitWindowsEx(Shutdown): {e}")))?;
+                ExitWindowsEx(EWX_SHUTDOWN | EWX_FORCEIFHUNG, SHTDN_REASON_MAJOR_OTHER)
+                    .map_err(|e| Error::Os(format!("ExitWindowsEx(Shutdown): {e}")))?;
                 Ok(())
             },
         }

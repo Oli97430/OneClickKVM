@@ -163,9 +163,7 @@ impl UdpFecReceiver {
             // Cap protectif : avant d'insérer un nouveau seq, on évince le
             // plus ancien si on est à la limite. Évite la croissance non
             // bornée sous attaque spray-orphan-shards.
-            if !self.pending.contains_key(&hdr.seq)
-                && self.pending.len() >= MAX_PENDING_FRAMES
-            {
+            if !self.pending.contains_key(&hdr.seq) && self.pending.len() >= MAX_PENDING_FRAMES {
                 if let Some((&oldest, _)) = self.pending.iter().next() {
                     self.pending.remove(&oldest);
                     tracing::debug!(seq = oldest, "UDP: pending plein, eviction FIFO");

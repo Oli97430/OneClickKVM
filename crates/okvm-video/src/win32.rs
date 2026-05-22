@@ -65,15 +65,10 @@ impl Default for WindowsCaptureSource {
 
 #[async_trait]
 impl VideoCapture for WindowsCaptureSource {
-    async fn start(
-        &self,
-        screen_idx: u32,
-        tx: mpsc::Sender<VideoMessage>,
-    ) -> Result<VideoHandle> {
+    async fn start(&self, screen_idx: u32, tx: mpsc::Sender<VideoMessage>) -> Result<VideoHandle> {
         let (stop_tx, _stop_rx) = tokio::sync::oneshot::channel::<()>();
         let (frame_tx, frame_rx) = std_mpsc::channel::<EncodedFrame>();
-        let (init_tx, init_rx) =
-            std_mpsc::channel::<std::result::Result<StreamInfo, String>>();
+        let (init_tx, init_rx) = std_mpsc::channel::<std::result::Result<StreamInfo, String>>();
 
         let target_width = self.target_width;
         let target_height = self.target_height;
@@ -198,9 +193,7 @@ fn run_capture_thread(
     let monitor = match select_monitor(screen_idx) {
         Some(m) => m,
         None => {
-            let _ = init_tx.send(Err(format!(
-                "moniteur d'index {screen_idx} introuvable"
-            )));
+            let _ = init_tx.send(Err(format!("moniteur d'index {screen_idx} introuvable")));
             return;
         }
     };

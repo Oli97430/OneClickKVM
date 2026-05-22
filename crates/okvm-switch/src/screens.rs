@@ -33,10 +33,15 @@ pub fn enumerate_local_screens() -> Vec<ScreenInfo> {
     for (i, s) in collected.iter_mut().enumerate() {
         s.index = i as u32;
         // SAFETY: API standard.
-        let hmon = unsafe { MonitorFromPoint(
-            POINT { x: s.origin_x, y: s.origin_y },
-            MONITOR_DEFAULTTOPRIMARY,
-        ) };
+        let hmon = unsafe {
+            MonitorFromPoint(
+                POINT {
+                    x: s.origin_x,
+                    y: s.origin_y,
+                },
+                MONITOR_DEFAULTTOPRIMARY,
+            )
+        };
         s.is_primary = hmon == primary;
     }
     collected

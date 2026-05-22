@@ -88,9 +88,7 @@ async fn loopback_k4_m2_recovers_packet_loss() {
         }
     });
 
-    let recv_handle = tokio::spawn(async move {
-        receiver.recv_frame().await
-    });
+    let recv_handle = tokio::spawn(async move { receiver.recv_frame().await });
 
     let payload: Vec<u8> = (0..2000_u32).map(|i| (i as u8).wrapping_mul(13)).collect();
     sender.send_frame(&payload).await.unwrap();
@@ -133,11 +131,8 @@ async fn receiver_caps_pending_frames_under_spray_attack() {
 
     // On lance recv_frame avec un timeout court — il ne doit jamais réussir,
     // mais surtout pas OOM-er. Si le test passe sans crash, le cap fonctionne.
-    let res = tokio::time::timeout(
-        std::time::Duration::from_millis(500),
-        receiver.recv_frame(),
-    )
-    .await;
+    let res =
+        tokio::time::timeout(std::time::Duration::from_millis(500), receiver.recv_frame()).await;
     // Le résultat attendu = timeout (Err côté tokio::time::timeout) ou erreur
     // recv. Aucun frame réel n'a été émis.
     assert!(res.is_err() || res.as_ref().is_ok_and(|_| false));
@@ -195,11 +190,8 @@ async fn loopback_drops_too_many_shards() {
     // panique pas après la perte.
 
     // On exécute juste un timeout court sur recv_frame.
-    let res = tokio::time::timeout(
-        std::time::Duration::from_millis(200),
-        receiver.recv_frame(),
-    )
-    .await;
+    let res =
+        tokio::time::timeout(std::time::Duration::from_millis(200), receiver.recv_frame()).await;
     // Soit timeout (rien reçu), soit Ok mais on n'arrive pas à valider le payload
     // ici puisque le 2e frame n'est pas envoyé. L'essentiel : pas de panic.
     let _ = (res, p2);

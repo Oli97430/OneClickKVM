@@ -287,7 +287,8 @@ fn load_json_or_default<T: serde::de::DeserializeOwned + Default>(path: &Path) -
 
 fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<()> {
     let tmp = path.with_extension("json.tmp");
-    let s = serde_json::to_string_pretty(value).map_err(|e| okvm_core::Error::Serde(e.to_string()))?;
+    let s =
+        serde_json::to_string_pretty(value).map_err(|e| okvm_core::Error::Serde(e.to_string()))?;
     std::fs::write(&tmp, s)?;
     std::fs::rename(&tmp, path)?;
     Ok(())

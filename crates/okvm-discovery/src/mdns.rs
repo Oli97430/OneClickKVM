@@ -37,8 +37,8 @@ pub struct MdnsService {
 impl MdnsService {
     /// Cree et demarre le daemon, et enregistre le service local.
     pub fn new(announce: SelfAnnounce) -> Result<Self> {
-        let daemon = ServiceDaemon::new()
-            .map_err(|e| okvm_core::Error::Net(format!("mdns daemon: {e}")))?;
+        let daemon =
+            ServiceDaemon::new().map_err(|e| okvm_core::Error::Net(format!("mdns daemon: {e}")))?;
 
         let instance = unique_instance_name(&announce);
         let id_b64 = URL_SAFE_NO_PAD.encode(announce.device_id.0);
@@ -197,7 +197,13 @@ fn unique_instance_name(a: &SelfAnnounce) -> String {
 
 fn sanitize(s: &str) -> String {
     s.chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
         .take(32)
         .collect()
 }

@@ -160,12 +160,7 @@ impl AeadSession {
     /// # Erreur
     /// - [`AeadError::Decrypt`] si l'authentification échoue ou si le seq est
     ///   déjà vu / hors fenêtre.
-    pub fn open(
-        &mut self,
-        seq: u64,
-        aad: &[u8],
-        ciphertext: &[u8],
-    ) -> Result<Vec<u8>, AeadError> {
+    pub fn open(&mut self, seq: u64, aad: &[u8], ciphertext: &[u8]) -> Result<Vec<u8>, AeadError> {
         if !self.replay_check(seq) {
             return Err(AeadError::Decrypt);
         }

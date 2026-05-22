@@ -191,8 +191,7 @@ fn check_hardware_flag(act: &IMFActivate) -> bool {
     unsafe {
         let mut buf_ptr: windows::core::PWSTR = windows::core::PWSTR(std::ptr::null_mut());
         let mut len: u32 = 0;
-        let res = act
-            .GetAllocatedString(&MFT_ENUM_HARDWARE_URL_Attribute, &mut buf_ptr, &mut len);
+        let res = act.GetAllocatedString(&MFT_ENUM_HARDWARE_URL_Attribute, &mut buf_ptr, &mut len);
         if !buf_ptr.0.is_null() {
             windows::Win32::System::Com::CoTaskMemFree(Some(buf_ptr.0.cast()));
         }

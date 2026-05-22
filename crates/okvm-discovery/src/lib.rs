@@ -109,7 +109,8 @@ impl DiscoveryService {
         enable_mdns: bool,
         enable_broadcast: bool,
     ) -> Result<Self> {
-        let known: Arc<Mutex<HashMap<PeerKey, DiscoveredPeer>>> = Arc::new(Mutex::new(HashMap::new()));
+        let known: Arc<Mutex<HashMap<PeerKey, DiscoveredPeer>>> =
+            Arc::new(Mutex::new(HashMap::new()));
         let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
         let mut handles = Vec::new();
 

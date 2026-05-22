@@ -49,15 +49,14 @@ impl UdpDiscovery {
         tracing::info!(port = UDP_DISCOVERY_PORT, "udp discovery: bound");
 
         let beacon = build_beacon(&self.announce);
-        let beacon_bytes = match bincode::serde::encode_to_vec(&beacon, bincode::config::standard()) {
+        let beacon_bytes = match bincode::serde::encode_to_vec(&beacon, bincode::config::standard())
+        {
             Ok(b) => b,
             Err(e) => return Err(okvm_core::Error::Serde(e.to_string())),
         };
 
-        let broadcast_addr = SocketAddr::V4(SocketAddrV4::new(
-            Ipv4Addr::BROADCAST,
-            UDP_DISCOVERY_PORT,
-        ));
+        let broadcast_addr =
+            SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::BROADCAST, UDP_DISCOVERY_PORT));
 
         let mut emit_tick = interval(Duration::from_secs(5));
         let mut buf = vec![0u8; 4096];

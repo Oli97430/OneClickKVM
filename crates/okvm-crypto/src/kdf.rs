@@ -76,7 +76,11 @@ pub fn derive_session_keys(
 /// Variante pour dériver une clé de **contrôle** distincte (rarement utilisée,
 /// réservée à des messages hors-bande type rotation négociée).
 #[must_use]
-pub fn derive_ctrl_key(shared_secret: &[u8; 32], transcript_hash: &[u8; 32], epoch: u32) -> [u8; 32] {
+pub fn derive_ctrl_key(
+    shared_secret: &[u8; 32],
+    transcript_hash: &[u8; 32],
+    epoch: u32,
+) -> [u8; 32] {
     let hk = Hkdf::<Sha256>::new(Some(transcript_hash.as_ref()), shared_secret);
     let mut info = Vec::with_capacity(INFO_CTRL.len() + 4);
     info.extend_from_slice(INFO_CTRL);

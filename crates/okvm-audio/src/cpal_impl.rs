@@ -186,7 +186,8 @@ fn run_capture_thread(
 
     let pcm_tx_arc = Arc::new(Mutex::new(Some(pcm_tx)));
     let pcm_tx_for_cb = pcm_tx_arc.clone();
-    let buf: Arc<Mutex<Vec<i16>>> = Arc::new(Mutex::new(Vec::with_capacity(frame_size as usize * 2)));
+    let buf: Arc<Mutex<Vec<i16>>> =
+        Arc::new(Mutex::new(Vec::with_capacity(frame_size as usize * 2)));
     let buf_for_cb = buf.clone();
 
     let err_fn = |e: cpal::StreamError| {
@@ -300,7 +301,10 @@ fn build_opus_encoder(sample_rate: u32, channels: u8) -> Option<OpusEncoder> {
         24000 => OpusSampleRate::Hz24000,
         48000 => OpusSampleRate::Hz48000,
         _ => {
-            tracing::info!(sr = sample_rate, "sample rate non supporte par Opus, fallback PCM");
+            tracing::info!(
+                sr = sample_rate,
+                "sample rate non supporte par Opus, fallback PCM"
+            );
             return None;
         }
     };
@@ -308,14 +312,22 @@ fn build_opus_encoder(sample_rate: u32, channels: u8) -> Option<OpusEncoder> {
         1 => OpusChannels::Mono,
         2 => OpusChannels::Stereo,
         _ => {
-            tracing::info!(ch = channels, "channels non supporte par Opus, fallback PCM");
+            tracing::info!(
+                ch = channels,
+                "channels non supporte par Opus, fallback PCM"
+            );
             return None;
         }
     };
     match OpusEncoder::new(sr, ch, Application::Audio) {
         Ok(mut enc) => {
             let _ = enc.set_bitrate(audiopus::Bitrate::BitsPerSecond(OPUS_BITRATE_BPS));
-            tracing::info!(sr = sample_rate, ch = channels, bitrate = OPUS_BITRATE_BPS, "Opus encoder pret");
+            tracing::info!(
+                sr = sample_rate,
+                ch = channels,
+                bitrate = OPUS_BITRATE_BPS,
+                "Opus encoder pret"
+            );
             Some(enc)
         }
         Err(e) => {
@@ -485,7 +497,12 @@ impl AudioPlayback for CpalPlayback {
                 } else {
                     None
                 };
-                tracing::info!(?codec, sr = sample_rate_hz, ch = channels, "playback stream init");
+                tracing::info!(
+                    ?codec,
+                    sr = sample_rate_hz,
+                    ch = channels,
+                    "playback stream init"
+                );
                 Ok(())
             }
             AudioMessage::StreamFrame { payload, .. } => {

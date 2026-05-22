@@ -27,13 +27,15 @@ use windows::Win32::System::DataExchange::{
     SetClipboardData,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock, GMEM_MOVEABLE};
-use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetMessageW, RegisterClassW,
-    TranslateMessage, HMENU, HWND_MESSAGE, MSG, WINDOW_EX_STYLE, WINDOW_STYLE,
-    WM_CLIPBOARDUPDATE, WNDCLASSW,
+use windows::Win32::System::Memory::{
+    GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock, GMEM_MOVEABLE,
 };
 use windows::Win32::System::Ole::{CF_HDROP, CF_UNICODETEXT};
+use windows::Win32::UI::WindowsAndMessaging::{
+    CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetMessageW, RegisterClassW,
+    TranslateMessage, HMENU, HWND_MESSAGE, MSG, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CLIPBOARDUPDATE,
+    WNDCLASSW,
+};
 
 /// Implementation Win32.
 pub struct Win32Clipboard;
@@ -120,7 +122,10 @@ fn read_blocking() -> Result<Vec<ClipboardItem>> {
         } else if fmt == cf_html {
             if let Some(html_bytes) = read_ascii_bytes(fmt) {
                 if let Ok(s) = String::from_utf8(html_bytes) {
-                    items.push(ClipboardItem::Html { html: s, plaintext: None });
+                    items.push(ClipboardItem::Html {
+                        html: s,
+                        plaintext: None,
+                    });
                 }
             }
         } else if fmt == cf_png {
@@ -355,8 +360,7 @@ impl ClipboardGuard {
         // SAFETY: on appelle OpenClipboard sans HWND owner (acceptable pour
         // un user-mode app sans fenetre persistante).
         unsafe {
-            OpenClipboard(None)
-                .map_err(|e| okvm_core::Error::Os(format!("OpenClipboard: {e}")))?;
+            OpenClipboard(None).map_err(|e| okvm_core::Error::Os(format!("OpenClipboard: {e}")))?;
         }
         Ok(Self)
     }

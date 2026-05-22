@@ -398,41 +398,47 @@ impl Session {
                                                 }
                                                 let _ = app_ctrl_recv_tx.send(m).await;
                                             }
-                                            Err(e) => tracing::warn!(error = %e, "decode CtrlMessage"),
+                                            Err(e) => {
+                                                tracing::warn!(error = %e, "decode CtrlMessage")
+                                            }
                                         }
                                     }
                                     Channel::Input => {
-                                        if let Ok((m, _)) = bincode::serde::decode_from_slice::<
-                                            InputMessage,
-                                            _,
-                                        >(&pt, bincode_cfg())
+                                        if let Ok((m, _)) =
+                                            bincode::serde::decode_from_slice::<InputMessage, _>(
+                                                &pt,
+                                                bincode_cfg(),
+                                            )
                                         {
                                             let _ = app_input_recv_tx.send(m).await;
                                         }
                                     }
                                     Channel::Files => {
-                                        if let Ok((m, _)) = bincode::serde::decode_from_slice::<
-                                            FileMessage,
-                                            _,
-                                        >(&pt, bincode_cfg())
+                                        if let Ok((m, _)) =
+                                            bincode::serde::decode_from_slice::<FileMessage, _>(
+                                                &pt,
+                                                bincode_cfg(),
+                                            )
                                         {
                                             let _ = app_files_recv_tx.send(m).await;
                                         }
                                     }
                                     Channel::Audio => {
-                                        if let Ok((m, _)) = bincode::serde::decode_from_slice::<
-                                            AudioMessage,
-                                            _,
-                                        >(&pt, bincode_cfg())
+                                        if let Ok((m, _)) =
+                                            bincode::serde::decode_from_slice::<AudioMessage, _>(
+                                                &pt,
+                                                bincode_cfg(),
+                                            )
                                         {
                                             let _ = app_audio_recv_tx.send(m).await;
                                         }
                                     }
                                     Channel::Video => {
-                                        if let Ok((m, _)) = bincode::serde::decode_from_slice::<
-                                            VideoMessage,
-                                            _,
-                                        >(&pt, bincode_cfg())
+                                        if let Ok((m, _)) =
+                                            bincode::serde::decode_from_slice::<VideoMessage, _>(
+                                                &pt,
+                                                bincode_cfg(),
+                                            )
                                         {
                                             let _ = app_video_recv_tx.send(m).await;
                                         }

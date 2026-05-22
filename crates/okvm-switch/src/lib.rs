@@ -158,13 +158,7 @@ impl Grid {
     /// plusieurs candidats, on prend celui dont le centre est le plus proche
     /// du point d'origine.
     #[must_use]
-    pub fn neighbor(
-        &self,
-        from: GridPeerId,
-        edge: Edge,
-        px: i32,
-        py: i32,
-    ) -> Option<&GridPeer> {
+    pub fn neighbor(&self, from: GridPeerId, edge: Edge, px: i32, py: i32) -> Option<&GridPeer> {
         let mut best: Option<(&GridPeer, i64)> = None;
         for p in self.peers.values() {
             if p.id == from {
@@ -256,9 +250,9 @@ impl SwitchEngine {
     /// detecter quand le curseur tente de sortir).
     pub fn on_input(&mut self, msg: &InputMessage, local_bbox: Rect) -> SwitchDecision {
         match msg {
-            InputMessage::MouseMove { x_global, y_global, .. } => {
-                self.on_mouse_move(*x_global, *y_global, local_bbox)
-            }
+            InputMessage::MouseMove {
+                x_global, y_global, ..
+            } => self.on_mouse_move(*x_global, *y_global, local_bbox),
             InputMessage::KeyEvent {
                 vk,
                 state: ButtonState::Down,
@@ -392,7 +386,12 @@ mod tests {
 
     #[test]
     fn rect_exit_edge() {
-        let r = Rect { x: 0, y: 0, w: 100, h: 100 };
+        let r = Rect {
+            x: 0,
+            y: 0,
+            w: 100,
+            h: 100,
+        };
         assert_eq!(r.exit_edge(50, 50), None);
         assert_eq!(r.exit_edge(-1, 50), Some(Edge::Left));
         assert_eq!(r.exit_edge(100, 50), Some(Edge::Right));
@@ -417,7 +416,12 @@ mod tests {
     #[test]
     fn engine_switches_on_right_edge_after_dwell() {
         let mut g = Grid::default();
-        let local_bbox = Rect { x: 0, y: 0, w: 1920, h: 1080 };
+        let local_bbox = Rect {
+            x: 0,
+            y: 0,
+            w: 1920,
+            h: 1080,
+        };
         let p_right = make_peer("R", 1920, 0, 1920, 1080, None);
         let rid = p_right.id;
         g.peers.insert(rid, p_right);
@@ -462,7 +466,15 @@ mod tests {
             extended: false,
             modifiers: 14,
         };
-        let d = engine.on_input(&msg, Rect { x: 0, y: 0, w: 1920, h: 1080 });
+        let d = engine.on_input(
+            &msg,
+            Rect {
+                x: 0,
+                y: 0,
+                w: 1920,
+                h: 1080,
+            },
+        );
         match d {
             SwitchDecision::SwitchTo { target, .. } => assert_eq!(target, pid),
             other => panic!("attendu SwitchTo, recu {other:?}"),
@@ -481,7 +493,15 @@ mod tests {
             extended: false,
             modifiers: 14,
         };
-        let _ = engine.on_input(&msg, Rect { x: 0, y: 0, w: 1920, h: 1080 });
+        let _ = engine.on_input(
+            &msg,
+            Rect {
+                x: 0,
+                y: 0,
+                w: 1920,
+                h: 1080,
+            },
+        );
         assert!(engine.current.is_none());
     }
 }

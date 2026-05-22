@@ -55,19 +55,19 @@ impl FileReceiver {
     }
 
     /// Definit un callback de progression (`transfer_id, bytes_done, bytes_total, current_file`).
-    pub fn set_on_progress(
-        &self,
-        cb: impl Fn(Uuid, u64, u64, &str) + Send + Sync + 'static,
-    ) {
+    pub fn set_on_progress(&self, cb: impl Fn(Uuid, u64, u64, &str) + Send + Sync + 'static) {
         *self.on_progress.lock() = Some(Arc::new(cb));
     }
 
     /// Traite un message entrant.
     pub async fn on_message(&self, msg: FileMessage) -> Result<()> {
         match msg {
-            FileMessage::TransferStart { transfer_id, files, total_bytes, .. } => {
-                self.start(transfer_id, &files, total_bytes).await
-            }
+            FileMessage::TransferStart {
+                transfer_id,
+                files,
+                total_bytes,
+                ..
+            } => self.start(transfer_id, &files, total_bytes).await,
             FileMessage::Chunk {
                 transfer_id,
                 file_idx,
@@ -83,14 +83,18 @@ impl FileReceiver {
                         "CRC mismatch sur chunk offset {offset}: attendu {expected_crc:08x}, recu {actual_crc:08x}"
                     )));
                 }
-                self.write_chunk(transfer_id, file_idx, offset, &data, is_last).await
+                self.write_chunk(transfer_id, file_idx, offset, &data, is_last)
+                    .await
             }
             FileMessage::TransferComplete {
                 transfer_id,
                 file_idx,
                 blake3: expected,
             } => self.complete(transfer_id, file_idx, &expected).await,
-            FileMessage::TransferCancel { transfer_id, reason } => {
+            FileMessage::TransferCancel {
+                transfer_id,
+                reason,
+            } => {
                 self.cancel(transfer_id, &reason);
                 Ok(())
             }
@@ -174,12 +178,22 @@ impl FileReceiver {
                 .file_name()
                 .map(|s| s.to_string_lossy().into_owned())
                 .unwrap_or_default();
-            (slot.file.clone(), rel_path, bytes_done_snapshot, bytes_total_snapshot)
+            (
+                slot.file.clone(),
+                rel_path,
+                bytes_done_snapshot,
+                bytes_total_snapshot,
+            )
         };
 
         // Callback de progression (sans lock).
         if let Some(cb) = self.on_progress.lock().clone() {
-            cb(transfer_id, bytes_done_snapshot, bytes_total_snapshot, &rel_path);
+            cb(
+                transfer_id,
+                bytes_done_snapshot,
+                bytes_total_snapshot,
+                &rel_path,
+            );
         }
         // Ecrit sous lock du file uniquement (tokio Mutex : guard Send-friendly).
         let mut g = file_arc.lock().await;
@@ -196,12 +210,7 @@ impl FileReceiver {
         Ok(())
     }
 
-    async fn complete(
-        &self,
-        transfer_id: Uuid,
-        file_idx: u32,
-        expected: &[u8; 32],
-    ) -> Result<()> {
+    async fn complete(&self, transfer_id: Uuid, file_idx: u32, expected: &[u8; 32]) -> Result<()> {
         let (hasher, dest_abs, file_arc, expected_size, received) = {
             let mut g = self.transfers.lock();
             let st = g

@@ -36,15 +36,9 @@ impl Default for ConnectorConfig {
         Self {
             remote: "127.0.0.1:47101".parse().expect("addr litterale valide"),
             connect_timeout: Duration::from_secs(5),
-            handshake_timeout: Duration::from_millis(
-                okvm_protocol::consts::HANDSHAKE_TIMEOUT_MS,
-            ),
-            heartbeat_interval: Duration::from_millis(
-                okvm_protocol::consts::HEARTBEAT_INTERVAL_MS,
-            ),
-            heartbeat_timeout: Duration::from_millis(
-                okvm_protocol::consts::HEARTBEAT_TIMEOUT_MS,
-            ),
+            handshake_timeout: Duration::from_millis(okvm_protocol::consts::HANDSHAKE_TIMEOUT_MS),
+            heartbeat_interval: Duration::from_millis(okvm_protocol::consts::HEARTBEAT_INTERVAL_MS),
+            heartbeat_timeout: Duration::from_millis(okvm_protocol::consts::HEARTBEAT_TIMEOUT_MS),
             desired_channels: vec![
                 ChannelDesc {
                     id: 0,
@@ -76,7 +70,11 @@ pub struct Connector {
 
 impl Connector {
     /// Construit un connector.
-    pub fn new(cfg: ConnectorConfig, identity: IdentityKeypair, capabilities: Capabilities) -> Self {
+    pub fn new(
+        cfg: ConnectorConfig,
+        identity: IdentityKeypair,
+        capabilities: Capabilities,
+    ) -> Self {
         Self {
             cfg,
             identity,
@@ -86,10 +84,12 @@ impl Connector {
 
     /// Connecte et execute le handshake.
     pub async fn connect(self) -> Result<Session, DriverError> {
-        let mut stream =
-            tokio::time::timeout(self.cfg.connect_timeout, TcpStream::connect(self.cfg.remote))
-                .await
-                .map_err(|_| DriverError::Timeout)??;
+        let mut stream = tokio::time::timeout(
+            self.cfg.connect_timeout,
+            TcpStream::connect(self.cfg.remote),
+        )
+        .await
+        .map_err(|_| DriverError::Timeout)??;
         let _ = stream.set_nodelay(true);
 
         let outcome = drive_client(

@@ -30,15 +30,9 @@ impl Default for ListenerConfig {
     fn default() -> Self {
         Self {
             bind: "[::]:47101".parse().expect("addr litterale valide"),
-            handshake_timeout: Duration::from_millis(
-                okvm_protocol::consts::HANDSHAKE_TIMEOUT_MS,
-            ),
-            heartbeat_interval: Duration::from_millis(
-                okvm_protocol::consts::HEARTBEAT_INTERVAL_MS,
-            ),
-            heartbeat_timeout: Duration::from_millis(
-                okvm_protocol::consts::HEARTBEAT_TIMEOUT_MS,
-            ),
+            handshake_timeout: Duration::from_millis(okvm_protocol::consts::HANDSHAKE_TIMEOUT_MS),
+            heartbeat_interval: Duration::from_millis(okvm_protocol::consts::HEARTBEAT_INTERVAL_MS),
+            heartbeat_timeout: Duration::from_millis(okvm_protocol::consts::HEARTBEAT_TIMEOUT_MS),
         }
     }
 }

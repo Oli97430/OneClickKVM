@@ -75,8 +75,8 @@ impl UdpFecSender {
         let mut buf = vec![0u8; HEADER_LEN + shard_size];
         let k = u8::try_from(self.fec.data_shards()).expect("K ≤ MAX_DATA_SHARDS ≤ 16");
         let m = u8::try_from(self.fec.parity_shards()).expect("M ≤ MAX_PARITY_SHARDS ≤ 8");
-        let plain_len =
-            u32::try_from(ciphertext.len()).map_err(|_| SendError::ShardTooLarge(ciphertext.len()))?;
+        let plain_len = u32::try_from(ciphertext.len())
+            .map_err(|_| SendError::ShardTooLarge(ciphertext.len()))?;
         let shard_len = u16::try_from(shard_size).expect("shard_size ≤ MAX_SHARD_PAYLOAD ≤ 1400");
 
         for (i, shard) in shards.iter().enumerate() {

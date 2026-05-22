@@ -83,7 +83,9 @@ pub fn encode_tcp_frame(
     };
     let aad = header.aad();
 
-    let (used_seq, ct) = session.seal(&aad, plaintext).map_err(|_| FrameError::AeadEncrypt)?;
+    let (used_seq, ct) = session
+        .seal(&aad, plaintext)
+        .map_err(|_| FrameError::AeadEncrypt)?;
     debug_assert_eq!(used_seq, seq);
 
     let payload_len = FRAME_HEADER_SIZE + ct.len();
@@ -210,6 +212,9 @@ mod tests {
     #[test]
     fn length_too_large() {
         let prefix = (MAX_FRAME_BYTES as u32 + 1).to_be_bytes();
-        assert!(matches!(read_length_prefix(prefix), Err(FrameError::TooLarge(_, _))));
+        assert!(matches!(
+            read_length_prefix(prefix),
+            Err(FrameError::TooLarge(_, _))
+        ));
     }
 }

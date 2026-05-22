@@ -10,8 +10,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use okvm_core::{
-    Capabilities, ButtonState, ClipboardFormat, DeviceId, Edge, MouseButton, ScreenInfo,
-    TouchPhase,
+    ButtonState, Capabilities, ClipboardFormat, DeviceId, Edge, MouseButton, ScreenInfo, TouchPhase,
 };
 
 // ===========================================================================
@@ -33,7 +32,11 @@ pub enum CtrlMessage {
     /// Réponse à un `Ping`. `peer_ts_ms` recopie le `ts_ms` reçu.
     Pong { ts_ms: u64, peer_ts_ms: u64 },
     /// Heartbeat périodique avec stats légères.
-    Heartbeat { ts_ms: u64, cpu_pct: u8, rss_mb: u32 },
+    Heartbeat {
+        ts_ms: u64,
+        cpu_pct: u8,
+        rss_mb: u32,
+    },
     /// Mise à jour à chaud des capacités (ex : un écran a été branché).
     CapabilitiesUpdate(Capabilities),
     /// Demande de rotation de clé : on incrémente l'epoch côté demandeur.
@@ -185,7 +188,10 @@ pub enum ClipboardItem {
     /// Texte enrichi RTF (ASCII / 7-bit).
     Rtf(String),
     /// Fragment HTML, avec optionnellement une version texte brut alternative.
-    Html { html: String, plaintext: Option<String> },
+    Html {
+        html: String,
+        plaintext: Option<String>,
+    },
     /// Image PNG (octets bruts).
     Png(Vec<u8>),
     /// Liste de chemins (drag&drop fichier classique). Le transfert effectif
@@ -213,7 +219,10 @@ pub enum FileMessage {
         threads: u8,
     },
     /// Acceptation, éventuellement partielle (`accepted` = indexes acceptés).
-    TransferAccept { transfer_id: Uuid, accepted: Vec<u32> },
+    TransferAccept {
+        transfer_id: Uuid,
+        accepted: Vec<u32>,
+    },
     /// Refus complet.
     TransferReject { transfer_id: Uuid, reason: String },
     /// Un chunk de données.
@@ -232,9 +241,17 @@ pub enum FileMessage {
         crc32: u32,
     },
     /// ACK chunk reçu (window-based flow control optionnel).
-    ChunkAck { transfer_id: Uuid, file_idx: u32, offset: u64 },
+    ChunkAck {
+        transfer_id: Uuid,
+        file_idx: u32,
+        offset: u64,
+    },
     /// Fin d'un fichier individuel (envoie le BLAKE3 pour vérif intégrité).
-    TransferComplete { transfer_id: Uuid, file_idx: u32, blake3: [u8; 32] },
+    TransferComplete {
+        transfer_id: Uuid,
+        file_idx: u32,
+        blake3: [u8; 32],
+    },
     /// Annulation explicite par l'un des deux côtés.
     TransferCancel { transfer_id: Uuid, reason: String },
 }
@@ -338,7 +355,10 @@ pub enum VideoMessage {
         payload: Vec<u8>,
     },
     /// Demande explicite d'un keyframe (perte, resize, join initial).
-    KeyframeRequest { stream_id: Uuid, reason: KeyframeReason },
+    KeyframeRequest {
+        stream_id: Uuid,
+        reason: KeyframeReason,
+    },
     /// Arrête le stream.
     StreamStop { stream_id: Uuid },
     /// Ajuste à chaud le débit (contrôle de congestion).

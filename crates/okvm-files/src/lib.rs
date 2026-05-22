@@ -56,12 +56,7 @@ pub struct TransferProgress {
 #[async_trait]
 pub trait FileTransferManager: Send + Sync {
     /// Demarre un transfert sortant.
-    async fn send(
-        &self,
-        target_peer: Uuid,
-        files: Vec<PathBuf>,
-        threads: u8,
-    ) -> Result<Uuid>;
+    async fn send(&self, target_peer: Uuid, files: Vec<PathBuf>, threads: u8) -> Result<Uuid>;
 
     /// Accepte un transfert entrant (annonce via `TransferStart`).
     async fn accept_inbound(
@@ -136,7 +131,11 @@ pub fn crc32(data: &[u8]) -> u32 {
     for &b in data {
         crc ^= u32::from(b);
         for _ in 0..8 {
-            crc = if crc & 1 != 0 { (crc >> 1) ^ POLY } else { crc >> 1 };
+            crc = if crc & 1 != 0 {
+                (crc >> 1) ^ POLY
+            } else {
+                crc >> 1
+            };
         }
     }
     !crc

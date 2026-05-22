@@ -172,8 +172,7 @@ impl HandshakeState {
         self.transcript.update(client_hello_bytes);
         self.remote_eph = Some(PublicKey::from(client_eph_pub));
         self.remote_identity = Some(
-            DeviceId::from_slice(&client_identity_pub)
-                .map_err(|_| HandshakeError::BadEd25519)?,
+            DeviceId::from_slice(&client_identity_pub).map_err(|_| HandshakeError::BadEd25519)?,
         );
         // Vérifie syntaxiquement la clé Ed25519 (rejette les bytes non valides).
         VerifyingKey::from_bytes(&client_identity_pub).map_err(|_| HandshakeError::BadEd25519)?;
@@ -213,8 +212,7 @@ impl HandshakeState {
         self.transcript.update(server_signature_bytes);
         self.remote_eph = Some(PublicKey::from(server_eph_pub));
         self.remote_identity = Some(
-            DeviceId::from_slice(&server_identity_pub)
-                .map_err(|_| HandshakeError::BadEd25519)?,
+            DeviceId::from_slice(&server_identity_pub).map_err(|_| HandshakeError::BadEd25519)?,
         );
         self.compute_shared()?;
         Ok(())
@@ -222,9 +220,14 @@ impl HandshakeState {
 
     /// **Côté client** : intègre ClientHello dans le transcript (à appeler
     /// juste après avoir sérialisé et envoyé ClientHello).
-    pub fn feed_self_client_hello(&mut self, client_hello_bytes: &[u8]) -> Result<(), HandshakeError> {
+    pub fn feed_self_client_hello(
+        &mut self,
+        client_hello_bytes: &[u8],
+    ) -> Result<(), HandshakeError> {
         if self.role != HandshakeRole::Client {
-            return Err(HandshakeError::BadState("feed_self_client_hello côté serveur"));
+            return Err(HandshakeError::BadState(
+                "feed_self_client_hello côté serveur",
+            ));
         }
         self.transcript.update(client_hello_bytes);
         Ok(())
@@ -271,17 +274,15 @@ impl HandshakeState {
     }
 
     /// Vérifie une signature Ed25519 reçue contre le transcript courant.
-    pub fn verify_remote_transcript_sig(
-        &self,
-        signature: &[u8; 64],
-    ) -> Result<(), HandshakeError> {
-        let id = self.remote_identity.ok_or(HandshakeError::BadState(
-            "remote identity inconnue",
-        ))?;
+    pub fn verify_remote_transcript_sig(&self, signature: &[u8; 64]) -> Result<(), HandshakeError> {
+        let id = self
+            .remote_identity
+            .ok_or(HandshakeError::BadState("remote identity inconnue"))?;
         let pk = VerifyingKey::from_bytes(&id.0).map_err(|_| HandshakeError::BadEd25519)?;
         let h = self.current_transcript_hash();
         let sig = Signature::from_bytes(signature);
-        pk.verify(&h, &sig).map_err(|_| HandshakeError::BadSignature)
+        pk.verify(&h, &sig)
+            .map_err(|_| HandshakeError::BadSignature)
     }
 
     /// Derive les cles de session **sans consommer** la machine de handshake.
@@ -407,7 +408,9 @@ mod tests {
         ch_bytes.extend_from_slice(&client_pk.0);
 
         client.feed_self_client_hello(&ch_bytes).unwrap();
-        server.recv_client_hello(&ch_bytes, client_eph, client_pk.0).unwrap();
+        server
+            .recv_client_hello(&ch_bytes, client_eph, client_pk.0)
+            .unwrap();
 
         // ===== ServerHello =====
         let server_eph = server.local_eph_public();
@@ -422,7 +425,15 @@ mod tests {
         server.feed_self_server_signature(&server_sig);
 
         // Côté client : reçoit sh_unsigned + sig
-        client.recv_server_hello(&sh_unsigned, server_eph, server_pk.0, &server_sig, &server_sig).unwrap();
+        client
+            .recv_server_hello(
+                &sh_unsigned,
+                server_eph,
+                server_pk.0,
+                &server_sig,
+                &server_sig,
+            )
+            .unwrap();
 
         // ===== ClientFinished (simulé : juste signature transcript) =====
         let cf_sig = client.sign_transcript();

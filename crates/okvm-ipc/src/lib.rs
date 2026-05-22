@@ -68,7 +68,11 @@ pub struct PairRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PairResult {
     /// Appairage réussi.
-    Success { device_id: DeviceId, fingerprint: Fingerprint, name: String },
+    Success {
+        device_id: DeviceId,
+        fingerprint: Fingerprint,
+        name: String,
+    },
     /// Échec.
     Failure { reason: String },
 }
@@ -96,7 +100,11 @@ pub enum BackendEvent {
     /// Un pair s'est déconnecté.
     PeerDisconnected { device_id: DeviceId, reason: String },
     /// Notification UI à afficher (toast).
-    Notification { level: NotificationLevel, title: String, body: String },
+    Notification {
+        level: NotificationLevel,
+        title: String,
+        body: String,
+    },
     /// Demande de confirmation utilisateur (prompt ACL, par exemple).
     ConfirmationRequested { request_id: String, prompt: String },
     /// Progression d'un transfert de fichier (envoi ou réception).

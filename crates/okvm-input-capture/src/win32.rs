@@ -20,9 +20,10 @@ use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, DispatchMessageW, GetMessageW, PostThreadMessageW, SetWindowsHookExW,
     TranslateMessage, UnhookWindowsHookEx, HC_ACTION, HHOOK, KBDLLHOOKSTRUCT, LLKHF_EXTENDED,
-    LLKHF_INJECTED, LLKHF_UP, LLMHF_INJECTED, MSG, MSLLHOOKSTRUCT, WH_KEYBOARD_LL, WH_MOUSE_LL, WM_KEYUP, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEMOVE,
-    WM_MOUSEWHEEL, WM_MOUSEHWHEEL, WM_QUIT, WM_RBUTTONDOWN, WM_RBUTTONUP,
-    WM_SYSKEYUP, WM_XBUTTONDOWN, WM_XBUTTONUP, XBUTTON1, XBUTTON2,
+    LLKHF_INJECTED, LLKHF_UP, LLMHF_INJECTED, MSG, MSLLHOOKSTRUCT, WH_KEYBOARD_LL, WH_MOUSE_LL,
+    WM_KEYUP, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL,
+    WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_QUIT, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SYSKEYUP,
+    WM_XBUTTONDOWN, WM_XBUTTONUP, XBUTTON1, XBUTTON2,
 };
 
 /// Capture Win32 active sur Windows.
@@ -143,12 +144,9 @@ fn run_hook_thread(tx: std_mpsc::Sender<InputMessage>, tid_tx: std_mpsc::Sender<
     // Installe les deux hooks. Note: avec hmod == NULL et un thread_id = 0,
     // ce sont des hooks **globaux** (tous threads de la session).
     // SAFETY: SetWindowsHookExW est thread-safe et le callback est statique.
-    let kb_hook = unsafe {
-        SetWindowsHookExW(WH_KEYBOARD_LL, Some(low_level_keyboard_proc), hmod, 0)
-    };
-    let mouse_hook = unsafe {
-        SetWindowsHookExW(WH_MOUSE_LL, Some(low_level_mouse_proc), hmod, 0)
-    };
+    let kb_hook =
+        unsafe { SetWindowsHookExW(WH_KEYBOARD_LL, Some(low_level_keyboard_proc), hmod, 0) };
+    let mouse_hook = unsafe { SetWindowsHookExW(WH_MOUSE_LL, Some(low_level_mouse_proc), hmod, 0) };
 
     let kb_hook = match kb_hook {
         Ok(h) => h,
@@ -227,7 +225,8 @@ unsafe extern "system" fn low_level_keyboard_proc(
         return unsafe { CallNextHookEx(HHOOK::default(), n_code, wparam, lparam) };
     }
 
-    let state = if (info.flags.0 & LLKHF_UP.0) != 0 || wparam.0 as u32 == WM_KEYUP
+    let state = if (info.flags.0 & LLKHF_UP.0) != 0
+        || wparam.0 as u32 == WM_KEYUP
         || wparam.0 as u32 == WM_SYSKEYUP
     {
         ButtonState::Up
@@ -345,7 +344,12 @@ unsafe extern "system" fn low_level_mouse_proc(
             } else {
                 ButtonState::Up
             };
-            Some(InputMessage::MouseButton { button, state, x, y })
+            Some(InputMessage::MouseButton {
+                button,
+                state,
+                x,
+                y,
+            })
         }
         WM_MOUSEWHEEL => {
             let delta = ((info.mouseData >> 16) as i16) as i32;

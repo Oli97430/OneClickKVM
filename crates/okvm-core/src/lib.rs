@@ -15,16 +15,16 @@
 #![warn(missing_docs, clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
 
+pub mod caps;
 pub mod error;
 pub mod ids;
-pub mod caps;
 pub mod input;
 pub mod time;
 
+pub use caps::{
+    AudioCodec, Capabilities, OsInfo, Permission, PermissionPolicy, ScreenInfo, VideoCodec,
+};
 pub use error::{Error, Result};
 pub use ids::{DeviceId, Fingerprint, IdentityKeypair, PeerId};
-pub use caps::{
-    Capabilities, OsInfo, ScreenInfo, VideoCodec, AudioCodec, Permission, PermissionPolicy,
-};
-pub use input::{MouseButton, ButtonState, Edge, TouchPhase, ClipboardFormat};
+pub use input::{ButtonState, ClipboardFormat, Edge, MouseButton, TouchPhase};
 pub use time::Timestamp;

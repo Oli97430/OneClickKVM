@@ -57,11 +57,7 @@ impl Default for H264Backend {
 pub trait VideoCapture: Send + Sync {
     /// Démarre la capture de l'écran d'index `screen_idx`.
     /// Émet des `VideoMessage::StreamFrame` sur `tx`.
-    async fn start(
-        &self,
-        screen_idx: u32,
-        tx: mpsc::Sender<VideoMessage>,
-    ) -> Result<VideoHandle>;
+    async fn start(&self, screen_idx: u32, tx: mpsc::Sender<VideoMessage>) -> Result<VideoHandle>;
 }
 
 /// Trait pour le rendu vidéo (côté master qui reçoit).
