@@ -1,0 +1,81 @@
+# Dependabot config — vérifie hebdomadairement les MAJ de dépendances
+# (Cargo workspace, npm app frontend, GitHub Actions) et ouvre des PRs.
+#
+# Cible : groupes pour réduire le nombre de PRs, focus sur sécurité.
+
+version: 2
+updates:
+  # === Rust workspace (Cargo.toml + tous les crates) ===
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "rust"]
+    groups:
+      # Crates de cryptographie : MAJ ensemble pour cohérence
+      crypto:
+        patterns:
+          - "aes-gcm"
+          - "chacha20poly1305"
+          - "x25519-dalek"
+          - "ed25519-dalek"
+          - "hkdf"
+          - "sha2"
+          - "blake3"
+          - "rand_core"
+          - "getrandom"
+          - "zeroize"
+          - "subtle"
+      # Async runtime
+      tokio:
+        patterns:
+          - "tokio*"
+          - "futures*"
+          - "async-trait"
+      # windows-rs (souvent breaking au cross-version)
+      windows:
+        patterns:
+          - "windows"
+          - "windows-*"
+      # Tauri (groupé pour éviter de mélanger versions tauri / tauri-build)
+      tauri:
+        patterns:
+          - "tauri*"
+
+  # === Cargo de l'app shell (sépare du workspace via `[workspace] exclude`) ===
+  - package-ecosystem: cargo
+    directory: /app/src-tauri
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    labels: ["dependencies", "tauri"]
+
+  # === Frontend npm/pnpm ===
+  - package-ecosystem: npm
+    directory: /app
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    labels: ["dependencies", "frontend"]
+    groups:
+      svelte:
+        patterns:
+          - "svelte*"
+          - "@sveltejs/*"
+      vite:
+        patterns:
+          - "vite"
+          - "@vitejs/*"
+
+  # === GitHub Actions (workflows .github/workflows/) ===
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    labels: ["dependencies", "ci"]
