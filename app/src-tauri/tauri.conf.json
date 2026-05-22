@@ -1,0 +1,55 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "OneClick KVM",
+  "version": "0.1.0",
+  "identifier": "io.oneclick.kvm",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "OneClick KVM",
+        "width": 1100,
+        "height": 720,
+        "minWidth": 720,
+        "minHeight": 480,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true,
+        "transparent": false,
+        "center": true,
+        "dragDropEnabled": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": [
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
+    "category": "Utility",
+    "shortDescription": "Controle multi-PC chiffre",
+    "longDescription": "Application KM/KVM peer-to-peer chiffree AES-256 pour Windows. Partage clavier, souris, presse-papier, fichiers, audio et ecran entre plusieurs PCs sur le LAN.",
+    "publisher": "OneClick KVM contributors",
+    "homepage": "https://github.com/oneclick-kvm",
+    "copyright": "Copyright (C) 2026 OneClick KVM contributors",
+    "license": "MIT OR Apache-2.0",
+    "windows": {
+      "nsis": {
+        "displayLanguageSelector": true,
+        "languages": ["French", "English"],
+        "installMode": "currentUser",
+        "installerIcon": "icons/icon.ico"
+      }
+    }
+  }
+}

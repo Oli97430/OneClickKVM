@@ -1,0 +1,17 @@
+{
+  "extends": "@tsconfig/svelte/tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2021",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "resolveJsonModule": true,
+    "allowJs": false,
+    "strict": true,
+    "moduleResolution": "Bundler",
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.js", "src/**/*.svelte"],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}

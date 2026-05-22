@@ -1,0 +1,18 @@
+[package]
+name = "okvm-ipc"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Surface IPC entre le backend Rust et le frontend Tauri."
+
+[dependencies]
+okvm-core.workspace = true
+okvm-config.workspace = true
+okvm-protocol.workspace = true
+
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+async-trait.workspace = true
+tokio.workspace = true

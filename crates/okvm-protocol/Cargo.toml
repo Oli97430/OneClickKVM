@@ -1,0 +1,19 @@
+[package]
+name = "okvm-protocol"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Framing binaire, opcodes et sérialisation bincode du protocole OneClick KVM."
+
+[dependencies]
+okvm-core.workspace = true
+okvm-crypto.workspace = true
+
+serde.workspace = true
+bincode.workspace = true
+bytes.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true

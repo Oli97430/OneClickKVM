@@ -1,0 +1,19 @@
+[package]
+name = "okvm-switch"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Basculement transparent : edge detection, grille d'écrans, hotkeys."
+
+[dependencies]
+okvm-core.workspace = true
+okvm-protocol.workspace = true
+
+serde.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+parking_lot.workspace = true
+uuid.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows.workspace = true

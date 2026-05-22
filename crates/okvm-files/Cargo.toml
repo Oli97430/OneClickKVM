@@ -1,0 +1,21 @@
+[package]
+name = "okvm-files"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Transfert de fichiers multi-thread, drag & drop seamless."
+
+[dependencies]
+okvm-core.workspace = true
+okvm-protocol.workspace = true
+
+async-trait.workspace = true
+tokio.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+blake3.workspace = true
+uuid.workspace = true
+parking_lot.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows.workspace = true

@@ -1,0 +1,18 @@
+[package]
+name = "okvm-input-inject"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Injection clavier/souris via SendInput, mapping VK ↔ scancode."
+
+[dependencies]
+okvm-core.workspace = true
+okvm-protocol.workspace = true
+
+async-trait.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows.workspace = true

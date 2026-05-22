@@ -1,0 +1,19 @@
+[package]
+name = "okvm-udp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Transport UDP chiffré + Reed-Solomon FEC pour audio/vidéo basse latence."
+
+[dependencies]
+okvm-core.workspace = true
+okvm-crypto.workspace = true
+
+tokio.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+reed-solomon-erasure.workspace = true
+rand_core.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }

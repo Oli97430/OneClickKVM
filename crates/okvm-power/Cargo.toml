@@ -1,0 +1,17 @@
+[package]
+name = "okvm-power"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Verrouillage, mise en veille, redémarrage de la session courante."
+
+[dependencies]
+okvm-core.workspace = true
+
+async-trait.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows.workspace = true

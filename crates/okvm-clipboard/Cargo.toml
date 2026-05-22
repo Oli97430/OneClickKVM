@@ -1,0 +1,18 @@
+[package]
+name = "okvm-clipboard"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Synchronisation du presse-papier (texte, RTF, HTML, image)."
+
+[dependencies]
+okvm-core.workspace = true
+okvm-protocol.workspace = true
+
+async-trait.workspace = true
+tokio.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows.workspace = true

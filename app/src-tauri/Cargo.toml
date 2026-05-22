@@ -1,0 +1,52 @@
+[package]
+name = "oneclick-kvm-app"
+version = "0.1.0"
+edition = "2021"
+description = "OneClick KVM desktop application (Tauri 2 + Svelte)."
+default-run = "oneclick-kvm-app"
+
+[lib]
+name = "oneclick_kvm_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png", "devtools"] }
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1.40", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+parking_lot = "0.12"
+
+# Crates internes du workspace OneClick KVM
+okvm-core = { path = "../../crates/okvm-core" }
+okvm-crypto = { path = "../../crates/okvm-crypto" }
+okvm-protocol = { path = "../../crates/okvm-protocol" }
+okvm-ipc = { path = "../../crates/okvm-ipc" }
+okvm-config = { path = "../../crates/okvm-config" }
+okvm-logging = { path = "../../crates/okvm-logging" }
+okvm-net = { path = "../../crates/okvm-net" }
+okvm-discovery = { path = "../../crates/okvm-discovery" }
+okvm-wol = { path = "../../crates/okvm-wol" }
+okvm-input-capture = { path = "../../crates/okvm-input-capture" }
+okvm-input-inject = { path = "../../crates/okvm-input-inject" }
+okvm-switch = { path = "../../crates/okvm-switch" }
+okvm-files = { path = "../../crates/okvm-files" }
+okvm-audio = { path = "../../crates/okvm-audio" }
+okvm-video = { path = "../../crates/okvm-video" }
+uuid = { version = "1", features = ["v4", "serde"] }
+directories = "5"
+base64 = "0.22"
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
+sha2 = "0.10"
+subtle = "2.5"
+rand_core = { version = "0.6", features = ["std"] }
+zeroize = "1.7"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

@@ -1,0 +1,159 @@
+[workspace]
+resolver = "2"
+exclude = ["app/src-tauri"]
+members = [
+    "crates/okvm-core",
+    "crates/okvm-crypto",
+    "crates/okvm-protocol",
+    "crates/okvm-net",
+    "crates/okvm-udp",
+    "crates/okvm-discovery",
+    "crates/okvm-input-capture",
+    "crates/okvm-input-inject",
+    "crates/okvm-switch",
+    "crates/okvm-clipboard",
+    "crates/okvm-files",
+    "crates/okvm-audio",
+    "crates/okvm-video",
+    "crates/okvm-wol",
+    "crates/okvm-power",
+    "crates/okvm-logging",
+    "crates/okvm-config",
+    "crates/okvm-i18n",
+    "crates/okvm-ipc",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+license = "MIT OR Apache-2.0"
+authors = ["OneClick KVM contributors"]
+repository = ""
+
+[workspace.dependencies]
+# --- Async / runtime --------------------------------------------------------
+tokio = { version = "1.40", features = ["full"] }
+tokio-util = { version = "0.7", features = ["codec"] }
+futures = "0.3"
+async-trait = "0.1"
+
+# --- Sérialisation ----------------------------------------------------------
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+bincode = { version = "2", features = ["serde"] }
+
+# --- Crypto -----------------------------------------------------------------
+aes-gcm = "0.10"
+chacha20poly1305 = "0.10"
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+hkdf = "0.12"
+sha2 = "0.10"
+blake3 = "1.5"
+rand_core = { version = "0.6", features = ["std"] }
+getrandom = "0.2"
+zeroize = { version = "1.7", features = ["derive"] }
+subtle = "2.5"
+
+# --- FEC --------------------------------------------------------------------
+reed-solomon-erasure = "6"
+
+# --- Erreurs / logs ---------------------------------------------------------
+thiserror = "1"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# --- Utilitaires ------------------------------------------------------------
+uuid = { version = "1", features = ["v4", "v7", "serde"] }
+bytes = "1"
+parking_lot = "0.12"
+once_cell = "1"
+arc-swap = "1"
+directories = "5"
+base64 = "0.22"
+hex = "0.4"
+mdns-sd = "0.11"
+cpal = "0.15"
+windows-capture = "1.4"
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
+audiopus = "0.3.0-rc.0"
+openh264 = { version = "0.8", default-features = false, features = ["source"] }
+
+# --- Windows ----------------------------------------------------------------
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Threading",
+    "Win32_System_Memory",
+    "Win32_System_DataExchange",
+    "Win32_System_Ole",
+    "Win32_System_Com",
+    "Win32_System_EventLog",
+    "Win32_System_Shutdown",
+    "Win32_System_Power",
+    "Win32_Security",
+    "Win32_Security_Cryptography",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Shell",
+    "Win32_Graphics_Gdi",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D11",
+    "Win32_Media_Audio",
+    "Win32_Media_KernelStreaming",
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_NetworkManagement_NetManagement",
+    "Win32_Networking_WinSock",
+    "Win32_Storage_FileSystem",
+    "Win32_Globalization",
+    "Win32_Media_MediaFoundation",
+] }
+windows-core = "0.58"
+
+# --- Tests / bench ----------------------------------------------------------
+criterion = "0.5"
+proptest = "1"
+
+# --- Crates internes (auto-référence) ---------------------------------------
+okvm-core      = { path = "crates/okvm-core" }
+okvm-crypto    = { path = "crates/okvm-crypto" }
+okvm-protocol  = { path = "crates/okvm-protocol" }
+okvm-net       = { path = "crates/okvm-net" }
+okvm-discovery = { path = "crates/okvm-discovery" }
+okvm-input-capture = { path = "crates/okvm-input-capture" }
+okvm-input-inject  = { path = "crates/okvm-input-inject" }
+okvm-switch    = { path = "crates/okvm-switch" }
+okvm-clipboard = { path = "crates/okvm-clipboard" }
+okvm-files     = { path = "crates/okvm-files" }
+okvm-audio     = { path = "crates/okvm-audio" }
+okvm-video     = { path = "crates/okvm-video" }
+okvm-wol       = { path = "crates/okvm-wol" }
+okvm-power     = { path = "crates/okvm-power" }
+okvm-logging   = { path = "crates/okvm-logging" }
+okvm-config    = { path = "crates/okvm-config" }
+okvm-i18n      = { path = "crates/okvm-i18n" }
+okvm-ipc       = { path = "crates/okvm-ipc" }
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+debug = false
+
+[profile.dev]
+opt-level = 0
+debug = true
+
+# Profil pour fuzz : opt + debug pour symboles
+[profile.fuzz]
+inherits = "release"
+opt-level = 3
+debug = true
+panic = "unwind"

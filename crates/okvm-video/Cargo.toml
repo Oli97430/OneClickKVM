@@ -1,0 +1,24 @@
+[package]
+name = "okvm-video"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Capture DXGI Desktop Duplication, encodage/décodage H.264/HEVC matériel."
+
+[dependencies]
+okvm-core.workspace = true
+okvm-protocol.workspace = true
+
+serde.workspace = true
+async-trait.workspace = true
+tokio.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+parking_lot.workspace = true
+image.workspace = true
+openh264.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows.workspace = true
+windows-capture.workspace = true

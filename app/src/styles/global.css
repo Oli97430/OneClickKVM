@@ -1,0 +1,116 @@
+/* Thème "sombre" (par défaut) */
+:root {
+  --bg: #0f1115;
+  --surface: #181b22;
+  --surface-2: #1f232c;
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --border: rgba(255, 255, 255, 0.08);
+  --fg: #e7e9ee;
+  --fg-muted: #9aa0aa;
+  --accent: #3b82f6;
+  --accent-2: #8b5cf6;
+  --success: #22c55e;
+  --warn: #f59e0b;
+  --error: #ef4444;
+
+  font-family: "Segoe UI Variable", "Segoe UI", Roboto, system-ui, -apple-system,
+    Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--fg);
+  background: var(--bg);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Thème "clair" : explicite via data-theme="light" sur <html>, OU automatique
+   via prefers-color-scheme: light SI aucun data-theme n'est positionné. */
+
+html[data-theme="light"] {
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --surface-2: #f1f3f7;
+  --bg-hover: rgba(0, 0, 0, 0.04);
+  --border: rgba(0, 0, 0, 0.08);
+  --fg: #1a1d23;
+  --fg-muted: #5f6672;
+}
+
+html[data-theme="dark"] {
+  /* identique au :root par défaut, mais explicite pour annuler l'auto-light */
+  --bg: #0f1115;
+  --surface: #181b22;
+  --surface-2: #1f232c;
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --border: rgba(255, 255, 255, 0.08);
+  --fg: #e7e9ee;
+  --fg-muted: #9aa0aa;
+}
+
+/* Auto suivant la préférence système — actif SEULEMENT si aucun data-theme
+   forcé. C'est le cas par défaut quand AppConfig.theme = System. */
+@media (prefers-color-scheme: light) {
+  html:not([data-theme]) {
+    --bg: #f7f8fa;
+    --surface: #ffffff;
+    --surface-2: #f1f3f7;
+    --bg-hover: rgba(0, 0, 0, 0.04);
+    --border: rgba(0, 0, 0, 0.08);
+    --fg: #1a1d23;
+    --fg-muted: #5f6672;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  transition: background 200ms ease, color 200ms ease;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+button {
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(127, 127, 127, 0.4);
+}

@@ -1,0 +1,17 @@
+[package]
+name = "okvm-logging"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Couche tracing + sink Windows Event Log."
+
+[dependencies]
+okvm-core.workspace = true
+
+tracing.workspace = true
+tracing-subscriber.workspace = true
+thiserror.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows.workspace = true
+parking_lot.workspace = true

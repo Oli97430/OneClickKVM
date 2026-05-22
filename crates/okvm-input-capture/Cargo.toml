@@ -1,0 +1,20 @@
+[package]
+name = "okvm-input-capture"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Capture clavier/souris bas niveau via hooks Win32 WH_KEYBOARD_LL / WH_MOUSE_LL."
+
+[dependencies]
+okvm-core.workspace = true
+okvm-protocol.workspace = true
+
+tokio.workspace = true
+async-trait.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+parking_lot.workspace = true
+once_cell.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows.workspace = true
