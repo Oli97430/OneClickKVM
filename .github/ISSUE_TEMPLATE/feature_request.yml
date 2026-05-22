@@ -1,0 +1,57 @@
+name: ✨ Feature request
+description: Proposer une nouvelle fonctionnalité ou une amélioration
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Merci pour votre suggestion !
+
+        Pour les **changements majeurs** (nouveau protocole, refonte UI),
+        ouvrez d'abord une [discussion](https://github.com/Oli97430/OneClickKVM/discussions)
+        avant de soumettre cette feature request.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problème actuel
+      description: Quel besoin n'est pas couvert ? Quelle friction rencontrez-vous ?
+      placeholder: |
+        Aujourd'hui pour partager mon écran sur 3 PCs, je dois activer le partage
+        séparément pour chaque pair. Je voudrais un bouton "broadcast vers tous".
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Solution proposée
+      description: Décrivez la fonctionnalité idéale
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives envisagées
+      description: Avez-vous considéré d'autres approches ? Pourquoi celle-ci est meilleure ?
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Zone concernée
+      multiple: true
+      options:
+        - KM (clavier/souris)
+        - Vidéo
+        - Audio
+        - Fichiers
+        - Sécurité / appairage
+        - UI / UX
+        - Performance
+        - Cross-platform (macOS / Linux)
+        - Documentation
+        - Autre
+    validations:
+      required: true

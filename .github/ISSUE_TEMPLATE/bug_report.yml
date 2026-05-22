@@ -1,0 +1,91 @@
+name: 🐛 Bug report
+description: Signaler un comportement incorrect, un crash, ou une régression
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Merci de prendre le temps de reporter un bug !
+
+        **Avant de soumettre** : recherche dans les
+        [issues existantes](https://github.com/Oli97430/OneClickKVM/issues?q=is%3Aissue)
+        pour éviter les doublons.
+
+  - type: input
+    id: version
+    attributes:
+      label: Version OneClick KVM
+      description: Visible dans le panneau "À propos"
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Version Windows
+      description: "`winver` puis copier la ligne 'Version'"
+      placeholder: "Windows 11 24H2 (build 26100.2033)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Zone du bug
+      multiple: true
+      options:
+        - Capture clavier/souris (KM)
+        - Partage écran (vidéo)
+        - Partage audio
+        - Transfert de fichiers
+        - Presse-papier
+        - Découverte LAN (mDNS/UDP)
+        - Appairage / PIN flow
+        - UI (Tauri/Svelte)
+        - Configuration / persistance
+        - Système (tray, autostart, hotkeys)
+        - Sécurité
+        - Autre
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Que s'est-il passé ? Que devait-il se passer ?
+      placeholder: |
+        Quand je clique sur "Activer master" puis bouge la souris au bord droit,
+        au lieu de switcher vers PC2, le curseur reste bloqué sur PC1.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Étapes pour reproduire
+      placeholder: |
+        1. Lancer OneClick KVM sur PC1 et PC2 (LAN)
+        2. Appairer PC2 depuis PC1
+        3. Cliquer "Activer master"
+        4. Bouger la souris au bord droit → bug
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs Windows Event Viewer
+      description: Source `OneClickKVM`, niveau Warning ou Error
+      render: text
+      placeholder: Coller les lignes pertinentes (filtrer par horodatage)
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Confirmation
+      options:
+        - label: Je n'ai inclus aucune information sensible (clés privées, identités, IP publiques)
+          required: true

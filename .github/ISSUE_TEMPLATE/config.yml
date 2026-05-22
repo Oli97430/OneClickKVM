@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Discussions
+    url: https://github.com/Oli97430/OneClickKVM/discussions
+    about: Questions, idées générales, partage de configs — pas pour les bugs.
+  - name: 🔒 Faille de sécurité
+    url: https://github.com/Oli97430/OneClickKVM/security/advisories/new
+    about: Pour les vulnérabilités, utilisez le canal privé (Security Advisory) plutôt qu'une issue publique.
