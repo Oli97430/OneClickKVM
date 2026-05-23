@@ -186,20 +186,25 @@ pub fn spawn_pipe(
 
         loop {
             match receiver.recv_frame().await {
-                Ok(plaintext) => {
-                    // Pin l'addr si pas déjà fait. Le UdpFecReceiver ne nous
-                    // expose pas la source ici, mais on sait qu'AEAD a réussi
-                    // donc c'est un peer authentifié — on rebinde le socket
-                    // pour learner l'addr (alternative : passer la src par recv_frame).
-                    // V3.1 step 4 simplification : on tracera ça après en
-                    // déléguant le source-pinning à UdpFecReceiver lui-même
-                    // (TODO step 5). Pour l'instant, sans modif d'API on ne
-                    // peut pas pin côté serveur.
-                    if initial_filter.is_none() && remote_recv.lock().is_none() {
-                        tracing::debug!(
-                            "UDP audio : 1ère frame OK reçue, addr pinning à faire (TODO step 5)"
-                        );
-                        pin_notify_recv.notify_one();
+                Ok((plaintext, src)) => {
+                    // V3.1 step 7 : pin l'addr du peer sur le 1er decrypt
+                    // réussi quand on n'avait pas de filter initial (cas
+                    // serveur). Notifie le sender qui attendait peut-être
+                    // de connaître l'addr.
+                    if initial_filter.is_none() {
+                        let was_unset = {
+                            let mut guard = remote_recv.lock();
+                            if guard.is_none() {
+                                *guard = Some(src);
+                                true
+                            } else {
+                                false
+                            }
+                        };
+                        if was_unset {
+                            tracing::info!(?src, "UDP audio: remote addr pinned");
+                            pin_notify_recv.notify_waiters();
+                        }
                     }
                     let msg: AudioMessage = match bincode::serde::decode_from_slice(
                         &plaintext,
@@ -240,10 +245,8 @@ mod tests {
 
     #[tokio::test]
     async fn audio_pipe_round_trip_loopback() {
-        // Client → Serveur : 1 AudioMessage. Le serveur ne pin pas l'addr
-        // dans cette V3.1 step 4 (limitation documentée), donc on teste
-        // seulement le sens client→serveur en passant le serveur en
-        // « connu » dès le départ.
+        // Client → Serveur direct : les 2 connaissent l'addr de l'autre dès
+        // le début. Cas naïf, valide juste le pipe encode/decode.
         use okvm_protocol::AudioMessage;
         use uuid::Uuid;
 
@@ -253,7 +256,6 @@ mod tests {
         let client_addr = client_sock.local_addr().unwrap();
 
         let key = make_key();
-        // Client side : connaît serveur.
         let (client_send_tx, client_send_rx) = mpsc::channel::<AudioMessage>(8);
         let (client_recv_tx, _client_recv_rx) = mpsc::channel::<AudioMessage>(8);
         let _client_pipe = spawn_pipe(
@@ -266,8 +268,6 @@ mod tests {
         )
         .unwrap();
 
-        // Server side : connaît client (en V3.1 step 4 simplifié on bypasse
-        // le NAT-pinning en passant l'addr).
         let (_server_send_tx, server_send_rx) = mpsc::channel::<AudioMessage>(8);
         let (server_recv_tx, mut server_recv_rx) = mpsc::channel::<AudioMessage>(8);
         let _server_pipe = spawn_pipe(
@@ -280,7 +280,6 @@ mod tests {
         )
         .unwrap();
 
-        // Envoie 1 AudioMessage côté client.
         let msg = AudioMessage::StreamStart {
             stream_id: Uuid::nil(),
             codec: okvm_core::AudioCodec::Opus,
@@ -291,11 +290,80 @@ mod tests {
         };
         client_send_tx.send(msg.clone()).await.unwrap();
 
-        // Le serveur doit le recevoir.
         let received = tokio::time::timeout(Duration::from_secs(2), server_recv_rx.recv())
             .await
             .expect("timeout — UDP audio pipe doit livrer en <2s")
             .expect("server_recv_rx fermé");
         assert_eq!(received, msg);
+    }
+
+    #[tokio::test]
+    async fn audio_pipe_server_pins_remote_on_first_frame() {
+        // V3.1 step 7 : démontre le vrai NAT pinning. Le serveur démarre
+        // avec remote_addr = None ; quand le client envoie sa première
+        // frame, le serveur pin l'addr et peut ensuite renvoyer dans le
+        // sens inverse (server → client).
+        use okvm_protocol::AudioMessage;
+        use uuid::Uuid;
+
+        let server_sock = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
+        let client_sock = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
+        let server_addr = server_sock.local_addr().unwrap();
+
+        let key = make_key();
+
+        // Client : connaît serveur.
+        let (client_send_tx, client_send_rx) = mpsc::channel::<AudioMessage>(8);
+        let (client_recv_tx, mut client_recv_rx) = mpsc::channel::<AudioMessage>(8);
+        let _client_pipe = spawn_pipe(
+            client_sock,
+            key.clone(),
+            key.clone(),
+            Some(server_addr),
+            client_send_rx,
+            client_recv_tx,
+        )
+        .unwrap();
+
+        // Serveur : ne connaît PAS le client au démarrage (NAT pinning auto).
+        let (server_send_tx, server_send_rx) = mpsc::channel::<AudioMessage>(8);
+        let (server_recv_tx, mut server_recv_rx) = mpsc::channel::<AudioMessage>(8);
+        let server_pipe = spawn_pipe(
+            server_sock,
+            key.clone(),
+            key,
+            None, // <-- pas d'addr initiale
+            server_send_rx,
+            server_recv_tx,
+        )
+        .unwrap();
+        assert!(server_pipe.remote_addr.lock().is_none());
+
+        // Le client envoie d'abord — le serveur pinera son addr.
+        let m1 = AudioMessage::StreamStop {
+            stream_id: Uuid::from_u128(1),
+        };
+        client_send_tx.send(m1.clone()).await.unwrap();
+
+        let r1 = tokio::time::timeout(Duration::from_secs(2), server_recv_rx.recv())
+            .await
+            .expect("client→server timeout")
+            .expect("server recv closed");
+        assert_eq!(r1, m1);
+        // Vérification du pinning.
+        let pinned = *server_pipe.remote_addr.lock();
+        assert!(pinned.is_some(), "serveur doit avoir pin l'addr");
+
+        // Maintenant le serveur peut renvoyer vers le client.
+        let m2 = AudioMessage::StreamStop {
+            stream_id: Uuid::from_u128(2),
+        };
+        server_send_tx.send(m2.clone()).await.unwrap();
+
+        let r2 = tokio::time::timeout(Duration::from_secs(2), client_recv_rx.recv())
+            .await
+            .expect("server→client timeout (pinning a échoué)")
+            .expect("client recv closed");
+        assert_eq!(r2, m2);
     }
 }

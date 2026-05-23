@@ -40,10 +40,14 @@ struct PendingFrame {
     plain_len: u32,
     inserted_at: Instant,
     received: u8,
+    /// Source du **premier** shard reçu pour ce frame. Si les shards arrivent
+    /// de sources différentes (NAT roaming ou attaque), on garde la première
+    /// — le caller décide quoi en faire (typiquement pin la source au 1er).
+    first_src: SocketAddr,
 }
 
 impl PendingFrame {
-    fn new(hdr: ShardHeader) -> Self {
+    fn new(hdr: ShardHeader, src: SocketAddr) -> Self {
         let total = hdr.data_shards as usize + hdr.parity_shards as usize;
         Self {
             shards: vec![None; total],
@@ -52,6 +56,7 @@ impl PendingFrame {
             plain_len: hdr.plain_len,
             inserted_at: Instant::now(),
             received: 0,
+            first_src: src,
         }
     }
 }
@@ -126,9 +131,13 @@ impl UdpFecReceiver {
     /// qu'une erreur fatale survienne. Les erreurs non fatales (datagrammes
     /// corrompus, mauvaise source) sont loguées en `debug` et ignorées.
     ///
+    /// Renvoie `(plaintext, source_addr)` où `source_addr` est l'addr UDP
+    /// distante du **premier shard** du frame — utile pour le "NAT pinning"
+    /// côté serveur quand `expected_remote == None`.
+    ///
     /// # Erreurs
     /// Erreurs I/O ou AEAD fatales (la session devrait être recréée).
-    pub async fn recv_frame(&mut self) -> Result<Vec<u8>, ReassembleError> {
+    pub async fn recv_frame(&mut self) -> Result<(Vec<u8>, SocketAddr), ReassembleError> {
         loop {
             self.drain_stale();
             let (n, src) = self.socket.recv_from(&mut self.recv_buf).await?;
@@ -176,7 +185,7 @@ impl UdpFecReceiver {
             let pf = self
                 .pending
                 .entry(hdr.seq)
-                .or_insert_with(|| PendingFrame::new(hdr));
+                .or_insert_with(|| PendingFrame::new(hdr, src));
             // On copie le payload dans le shard, sauf si déjà présent (dup).
             if pf.shards[hdr.index as usize].is_none() {
                 pf.shards[hdr.index as usize] = Some(payload.to_vec());
@@ -189,6 +198,7 @@ impl UdpFecReceiver {
                 let mut shards_owned = std::mem::take(&mut pf.shards);
                 let data_k = pf.data_shards as usize;
                 let parity_m = pf.parity_shards as usize;
+                let frame_src = pf.first_src;
                 self.pending.remove(&hdr.seq);
                 self.mark_resolved(hdr.seq);
 
@@ -211,7 +221,7 @@ impl UdpFecReceiver {
                         continue;
                     }
                 };
-                return Ok(plaintext);
+                return Ok((plaintext, frame_src));
             }
         }
     }

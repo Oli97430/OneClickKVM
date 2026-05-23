@@ -58,13 +58,13 @@ async fn shared_arc_socket_bidirectional() {
     // Bob envoie 2 frames vers Alice, Alice envoie 2 frames vers Bob — tout
     // en parallèle, le même socket sert dans les 2 directions.
     let alice_recv = tokio::spawn(async move {
-        let f1 = alice_rx.recv_frame().await.unwrap();
-        let f2 = alice_rx.recv_frame().await.unwrap();
+        let (f1, _) = alice_rx.recv_frame().await.unwrap();
+        let (f2, _) = alice_rx.recv_frame().await.unwrap();
         (f1, f2)
     });
     let bob_recv = tokio::spawn(async move {
-        let f1 = bob_rx.recv_frame().await.unwrap();
-        let f2 = bob_rx.recv_frame().await.unwrap();
+        let (f1, _) = bob_rx.recv_frame().await.unwrap();
+        let (f2, _) = bob_rx.recv_frame().await.unwrap();
         (f1, f2)
     });
 
@@ -104,7 +104,7 @@ async fn loopback_round_trip_k1_m1() {
     let recv_handle = tokio::spawn(async move {
         let mut got = Vec::new();
         for _ in 0..3 {
-            let f = receiver.recv_frame().await.unwrap();
+            let (f, _src) = receiver.recv_frame().await.unwrap();
             got.push(f);
         }
         got
@@ -161,7 +161,7 @@ async fn loopback_k4_m2_recovers_packet_loss() {
     let payload: Vec<u8> = (0..2000_u32).map(|i| (i as u8).wrapping_mul(13)).collect();
     sender.send_frame(&payload).await.unwrap();
 
-    let got = recv_handle.await.unwrap().unwrap();
+    let (got, _src) = recv_handle.await.unwrap().unwrap();
     assert_eq!(got, payload);
 }
 
