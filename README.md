@@ -160,6 +160,14 @@ Résumé :
 Problèmes courants → [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
 (découverte LAN, pairing, capture clavier, audio crépitement, SmartScreen).
 
+## Tester soi-même (2 instances locales)
+
+Tu peux lancer **2 instances OneClick KVM sur la même machine** pour
+valider le scénario complet appairage + KM + audio + écran + fichiers
+sans 2 PC physiques. Variable d'env `OKVM_INSTANCE` isole les configs.
+
+Guide pas-à-pas : [docs/TESTING.md](docs/TESTING.md).
+
 ## Statut
 
 Version actuelle : **0.1.1** (alpha, prêt pour usage personnel sur LAN de confiance).

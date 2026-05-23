@@ -137,15 +137,46 @@ pub struct PeerProfile {
     pub last_seen_ms: Option<u64>,
 }
 
-/// Renvoie le répertoire de configuration `%APPDATA%\OneClickKVM`.
+/// Renvoie le répertoire de configuration.
+///
+/// **Par défaut** : `%APPDATA%\OneClickKVM\`.
+///
+/// **Override pour multi-instance** : si la variable d'environnement
+/// `OKVM_INSTANCE` est définie (et non vide), le nom devient
+/// `OneClickKVM-{instance}`. Permet de lancer 2 instances OneClick KVM sur
+/// la même machine sans qu'elles écrasent mutuellement leurs configs
+/// `config.json`, `peers.json`, `identity.dpapi`.
+///
+/// Le nom d'instance est **sanitisé** : seul `[a-zA-Z0-9_-]` est conservé,
+/// max 32 caractères. Évite de créer des paths invalides Windows si
+/// l'utilisateur passe un mauvais nom.
+///
+/// Exemple : `$env:OKVM_INSTANCE = "alice"` → `%APPDATA%\OneClickKVM-alice\`.
 ///
 /// # Erreur
 /// Renvoie [`okvm_core::Error::Config`] si on ne peut pas déterminer le
 /// répertoire utilisateur.
 pub fn config_dir() -> Result<PathBuf> {
-    let pd = ProjectDirs::from("io", "OneClick", "OneClickKVM")
+    let suffix = std::env::var("OKVM_INSTANCE")
+        .ok()
+        .map(|s| sanitize_instance_name(&s))
+        .filter(|s| !s.is_empty());
+    let app_name = match &suffix {
+        Some(s) => format!("OneClickKVM-{s}"),
+        None => "OneClickKVM".to_string(),
+    };
+    let pd = ProjectDirs::from("io", "OneClick", &app_name)
         .ok_or_else(|| okvm_core::Error::Config("aucun ProjectDirs disponible".into()))?;
     Ok(pd.config_dir().to_path_buf())
+}
+
+/// Garde uniquement `[a-zA-Z0-9_-]`, plafonné à 32 caractères. Tout ce qui
+/// est rejeté est silencieusement supprimé.
+fn sanitize_instance_name(raw: &str) -> String {
+    raw.chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+        .take(32)
+        .collect()
 }
 
 /// Charge `AppConfig` depuis disque, ou la valeur par défaut si absent.
@@ -340,6 +371,19 @@ mod tests {
         let c = AppConfig::default();
         assert!(c.redact_logs);
         assert_eq!(c.bind_addr, "[::]");
+    }
+
+    #[test]
+    fn sanitize_instance_name_keeps_safe_chars() {
+        assert_eq!(sanitize_instance_name("alice"), "alice");
+        assert_eq!(sanitize_instance_name("alice_bob-42"), "alice_bob-42");
+        // Chars dangereux supprimés silencieusement.
+        assert_eq!(sanitize_instance_name("../etc/passwd"), "etcpasswd");
+        assert_eq!(sanitize_instance_name("a\\b/c"), "abc");
+        assert_eq!(sanitize_instance_name("a b c"), "abc");
+        // Plafonné à 32 chars.
+        let long = "x".repeat(100);
+        assert_eq!(sanitize_instance_name(&long).len(), 32);
     }
 
     #[test]
