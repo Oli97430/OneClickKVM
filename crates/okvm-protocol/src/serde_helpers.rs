@@ -29,27 +29,9 @@ pub(crate) mod bytes4 {
     }
 }
 
-#[allow(dead_code)]
-pub(crate) mod bytes16 {
-    use serde::{Deserialize, Deserializer, Serializer};
-
-    pub(crate) fn serialize<S: Serializer>(b: &[u8; 16], s: S) -> Result<S::Ok, S::Error> {
-        s.serialize_bytes(b)
-    }
-
-    pub(crate) fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<[u8; 16], D::Error> {
-        let v: Vec<u8> = Deserialize::deserialize(d)?;
-        if v.len() != 16 {
-            return Err(serde::de::Error::custom(format!(
-                "[u8; 16] attendu, recu {}",
-                v.len()
-            )));
-        }
-        let mut out = [0u8; 16];
-        out.copy_from_slice(&v);
-        Ok(out)
-    }
-}
+// bytes16 supprimé (was dead code) — si besoin futur, restaurer depuis git
+// history. Aucune struct du protocole n'utilise actuellement de `[u8; 16]`
+// serializable.
 
 pub(crate) mod bytes32 {
     use serde::{Deserialize, Deserializer, Serializer};

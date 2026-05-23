@@ -38,7 +38,7 @@ use std::time::Duration;
 
 use parking_lot::Mutex;
 use tokio::net::UdpSocket;
-use tokio::sync::{mpsc, Notify};
+use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 use okvm_crypto::{aead::AeadKey, AeadSession};
@@ -49,11 +49,6 @@ use okvm_udp::{FecCodec, UdpFecReceiver, UdpFecSender};
 pub const AUDIO_FEC_K: usize = 1;
 /// Shards de parité par défaut.
 pub const AUDIO_FEC_M: usize = 1;
-
-/// (Non utilisé depuis REVIEW fix #1 — le sender ne bloque plus, il
-/// re-check le pin à chaque frame.) Gardé pour compat docs.
-#[allow(dead_code)]
-const PIN_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Erreurs au démarrage du pipe.
 #[derive(Debug, thiserror::Error)]
@@ -112,12 +107,10 @@ pub fn spawn_pipe(
     app_audio_recv_tx: mpsc::Sender<AudioMessage>,
 ) -> Result<UdpAudioPipe, UdpAudioError> {
     let remote_addr = Arc::new(Mutex::new(remote_addr_init));
-    let pin_notify = Arc::new(Notify::new());
 
     // ----- Sender task -----
     let socket_send = socket.clone();
     let remote_send = remote_addr.clone();
-    let pin_notify_send = pin_notify.clone();
     let sender_task = tokio::spawn(async move {
         // V3.1 step 7 + REVIEW fix #1 : on init FEC + AEAD une fois, mais on
         // diffère la création du `UdpFecSender` jusqu'à ce que `remote_send`
@@ -196,16 +189,12 @@ pub fn spawn_pipe(
                 tracing::debug!(error = ?e, "UDP audio send échec (frame droppée)");
             }
         }
-        // pin_notify est désormais redundant — le ré-essai est fait à chaque
-        // frame. Garde la variable pour ne pas changer l'API publique.
-        let _ = pin_notify_send;
         tracing::debug!("UDP audio sender : app_audio_send_rx fermé, arrêt");
     });
 
     // ----- Receiver task -----
     let socket_recv = socket;
     let remote_recv = remote_addr.clone();
-    let pin_notify_recv = pin_notify;
     let receiver_task = tokio::spawn(async move {
         let fec = match FecCodec::new(AUDIO_FEC_K, AUDIO_FEC_M) {
             Ok(f) => f,
@@ -225,8 +214,9 @@ pub fn spawn_pipe(
                 Ok((plaintext, src)) => {
                     // V3.1 step 7 : pin l'addr du peer sur le 1er decrypt
                     // réussi quand on n'avait pas de filter initial (cas
-                    // serveur). Notifie le sender qui attendait peut-être
-                    // de connaître l'addr.
+                    // serveur). Le sender re-check `remote_recv` à chaque
+                    // frame qu'il dépile, donc pas besoin de Notify ici —
+                    // il se "réveillera" naturellement (cf. REVIEW fix #1).
                     if initial_filter.is_none() {
                         let was_unset = {
                             let mut guard = remote_recv.lock();
@@ -239,7 +229,6 @@ pub fn spawn_pipe(
                         };
                         if was_unset {
                             tracing::info!(?src, "UDP audio: remote addr pinned");
-                            pin_notify_recv.notify_waiters();
                         }
                     }
                     let msg: AudioMessage = match bincode::serde::decode_from_slice(
