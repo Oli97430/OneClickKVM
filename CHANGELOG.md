@@ -5,9 +5,158 @@ Toutes les modifications notables de OneClick KVM sont documentées ici.
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versions sémantiques [SemVer](https://semver.org/lang/fr/).
 
+## [Unreleased] — non publié sur GitHub Releases
+
+> ⚠️ **Statut** : tout ce qui suit vit dans `main` mais n'est PAS dans
+> l'installeur de la release v0.1.1. Validé par tests Rust + loopback,
+> **non testé E2E sur 2 vrais PCs** (l'environnement de dev n'en a qu'un).
+
+### Ajouté — V3.1 audio UDP+FEC bout-en-bout
+
+- **`okvm-udp` crate** (V3 step 0) : Reed-Solomon FEC + AEAD + framing.
+  13 tests dont 5 d'intégration (loopback, packet loss recovery K=4/M=2
+  avec 2 paquets perdus, spray-attack DoS protection, bidirectionnel
+  `Arc<UdpSocket>` partagé).
+- **Négociation UDP au handshake** (step 1+2) : `ServerFinished.udp_ports`
+  populé, `HandshakeOutcome.udp_keys` dérivé via HKDF epoch=1 (séparé du
+  nonce space TCP epoch=0).
+- **`okvm_net::UdpAudioPipe`** (step 4) : sender + receiver tasks qui
+  bridgent `mpsc<AudioMessage>` ⇄ UDP+FEC chiffré.
+- **NAT pinning auto** (step 7) : `UdpFecReceiver::recv_frame` remonte
+  la `SocketAddr` source, permettant au serveur de découvrir l'endpoint
+  UDP du client sur sa 1ère frame reçue puis renvoyer vers lui.
+- **`Session::start_with_udp`** (step 5+6) : variante qui substitue les
+  channels audio TCP par UDP+FEC. L'API `session.audio_tx/audio_rx` est
+  inchangée → AppState n'a aucune modification.
+- **Listener + Connector** détectent automatiquement la négociation UDP
+  et appellent `start_with_udp` au lieu de `start`. Fallback transparent
+  TCP si le bind UDP échoue.
+
+### Ajouté — V3.3 chemin MFT hardware (limité)
+
+- **`d3d11_helper.rs`** (step 1) : `D3D11Resources` + `IMFDXGIDeviceManager`,
+  reset_token via `MFCreateDXGIDeviceManager`. Test smoke d'init.
+- **`MfH264Encoder::try_new_hardware`** (step 2) : itère les MFTs via
+  `MFTEnumEx(HARDWARE)`, prend le 1er sync. Set `MFT_MESSAGE_SET_D3D_MANAGER`
+  avant configuration des media types.
+- **`MfH264Encoder::new_best`** : tente HW puis fallback software
+  (`CLSID_CMSH264EncoderMFT`) sans bruit.
+- **`MfH264Encoder::probe_best_backend`** : diagnostic non bloquant pour
+  AboutView, cache `OnceLock` process-wide pour éviter l'init répétée.
+- **`enumerate_h264_encoders`** : expose `is_async_mode` pour diagnostic.
+
+> ⚠️ **Honnêteté technique** : sur la machine de dev, les 3 MFTs hardware
+> trouvés (AMD, NVIDIA, Microsoft AVC DX12) sont tous en mode async. Seul
+> Microsoft AVC DX12 est sync — c'est lui qui est sélectionné. NVENC/AMF
+> réels nécessitent **V3.3.1** (event loop `METransformNeedInput` /
+> `METransformHaveOutput` — pas encore livré).
+
+### Ajouté — Multi-instance test local
+
+- **Variable d'env `OKVM_INSTANCE`** : si définie (et non vide), le
+  répertoire de config bascule vers `%APPDATA%\OneClickKVM-{instance}\`.
+  Permet de lancer 2 instances locales (alice/bob) pour valider le
+  scénario E2E complet sans 2 PCs.
+- Sanitisation stricte : `[a-zA-Z0-9_-]{,32}`, refuse les noms DOS
+  réservés (`CON`, `PRN`, `AUX`, `NUL`, `COM1-9`, `LPT1-9`).
+- **Recettes `just`** : `dev-alice`, `dev-bob`, `run-2`, `clean-test-configs`
+  (cf. `docs/TESTING.md`).
+
+### Ajouté — Sélecteur de moniteur + hot-rejoin
+
+- **Dropdown moniteur** dans Settings vidéo : `video_screen_idx` persisté,
+  fallback silencieux sur écran 0 si l'index n'existe plus.
+- **Hot-rejoin** : sessions mortes nettoyées après 5s (vs 15s avant), un
+  pair réapparu retrouve un slot propre instantanément.
+
+### Corrigé — Review code post V3.1
+
+- **#1 UDP audio dead-lock** : le sender ne s'endort plus en attendant un
+  `pin_notify` qui peut ne jamais arriver. Lazy-init du `UdpFecSender`
+  + re-check du pin à chaque frame applicative. Frames droppées quand
+  pas encore pinné sont comptées et logguées (puissances de 2).
+- **#2 TCP audio skew warn-once** : si un pair V3.0 envoie de l'audio
+  sur TCP alors que le canal local attend UDP, un warn est émis 1 seule
+  fois (au lieu de spam silencieux).
+- **#4 `UdpAudioError::MissingUdpKeys`** : erreur claire si on appelle
+  `Session::start_with_udp` sans que le handshake ait dérivé de clés UDP
+  (avant : `BadParams{0,0}` cryptique).
+- **#6 DOS reserved names** : `sanitize_instance_name` rejette en plus
+  `CON`/`PRN`/`AUX`/`NUL`/`COM[1-9]`/`LPT[1-9]` (casse-insensible).
+- **#9 cache probe** : `probe_best_backend` ne ré-énumère plus les MFTs
+  hardware à chaque ouverture d'AboutView (~10-50ms économisés par call).
+- **#10 doc `OKVM_INSTANCE`** : timing read-at-call documenté, best
+  practice = définir avant le démarrage process.
+
+### Tests
+- Workspace : **91 passing**, 2 ignored, 0 failed, `RUSTFLAGS=-D warnings`.
+- 1 test d'intégration UDP audio bout-en-bout en loopback (pin tardif
+  recovery → régression #1).
+- Aucun test **E2E entre 2 vrais PCs** — env de dev mono-machine.
+
+### À venir
+- **V3.3.1** : event loop async-mode pour MFT NVENC/AMF/QSV — débloquerait
+  le vrai hardware encoding sur la majorité des GPU modernes.
+- **Auto-update Tauri** : `tauri-plugin-updater` non câblé. La task #46
+  initiale couvrait scripts + doc, mais le plugin n'est pas dans
+  `Cargo.toml` ni dans `tauri.conf.json`. Statut : différé, l'utilisateur
+  doit checker GitHub Releases manuellement.
+- **Release v0.1.2** quand V3.1 sera validé sur vrais 2 PCs.
+
+## [0.1.1] — 2026-05-22
+
+Release CI-built reproductible. Aucun changement de comportement
+utilisateur par rapport à v0.1.0 ; valide le pipeline GitHub Actions
+(test + fmt + clippy informational + auto-bundle NSIS).
+
+### Modifié
+
+- **Build reproductible** : installeur produit par GitHub Actions (runner
+  Windows public) au lieu d'un build local. Garantit la même chaîne
+  d'outils et permet l'audit.
+- **Workspace lints** : `[workspace.lints]` centralisé dans `Cargo.toml`
+  racine, hérité par tous les crates via `[lints] workspace = true`.
+- **`.gitattributes`** : force LF cross-plateforme (évite que
+  `cargo fmt --check` casse sur CI Windows à cause d'autocrlf).
+- **`cargo fmt --all`** appliqué : 33 fichiers re-formattés selon
+  `rustfmt.toml`.
+
+### Infra OSS
+
+- CI GitHub Actions Windows (`cargo fmt --check`, `cargo test --workspace`,
+  `svelte-check --fail-on-warnings`).
+- Release auto sur tag `v*.*.*` (build NSIS + SHA-256 + sig Ed25519
+  optionnelle + manifest `latest.json` pour auto-updater).
+- Dependabot hebdo (semver-major ignoré, groupes crypto/tokio/windows/...).
+- Templates issues (bug, feature, config) + PR.
+- `CONTRIBUTING.md`, `SECURITY.md` racine, `.editorconfig`, `rustfmt.toml`.
+
+### Ajouté — Sécurité (durcissements post code-review)
+
+- **Anti-brute-force PIN** : compteur `failed_attempts` sur `PairingMode` ;
+  le mode d'appairage est désactivé automatiquement après 5 tentatives
+  ratées. Une demande sans PIN compte aussi comme tentative. Le lock est
+  conservé pendant tout le check + l'incrément pour éviter les attaques
+  en parallèle.
+- **Zeroize PIN** : `PairingMode.pin` est wrappé dans
+  `zeroize::Zeroizing<String>` pour effacer la mémoire à la destruction
+  (defense in depth).
+- **Cap pending shards** : `UdpFecReceiver.pending` est plafonné à 256
+  entrées avec éviction FIFO — protège contre une attaque
+  "spray-orphan-shards" qui ferait grossir la map indéfiniment. Mémoire
+  bornée ≈ 8.6 MB pire cas.
+- **MF init unifié** : `mediafoundation::ensure_mf_init()` (OnceLock
+  partagé) remplace les `MFStartup` répétés qui accumulaient des
+  ref-counts internes.
+- **Stabilité du wire-format config** : `H264BackendChoice` utilise
+  `#[serde(rename, alias)]` pour les noms kebab-case + alias PascalCase
+  legacy, permettant de renommer les variantes Rust sans casser les
+  `config.json` existants.
+
 ## [0.1.0] — 2026-05-21
 
-Première release publique (alpha). Prêt pour usage personnel sur LAN de confiance.
+Première release publique (alpha). Prêt pour usage personnel sur LAN
+de confiance.
 
 ### Ajouté — Clavier / souris partagés (KM)
 
@@ -109,134 +258,12 @@ Première release publique (alpha). Prêt pour usage personnel sur LAN de confia
 
 ### Limitations connues
 
-- Pas de signature Authenticode (SmartScreen avertit au premier lancement).
+- Pas de signature Authenticode (SmartScreen avertit au premier lancement —
+  décision projet, pas de certif prévue).
 - Vidéo software (CPU) — V3 ajoutera Media Foundation hardware.
 - Audio en TCP — V3 → UDP + FEC pour basse latence.
-- PIN flow d'appairage côté serveur en attente d'implémentation stricte.
-
-## [0.1.1] — 2026-05-22
-
-Release CI-built reproductible. Aucun changement de comportement utilisateur
-par rapport à v0.1.0 ; valide le pipeline GitHub Actions
-(test + fmt + clippy informational + auto-bundle NSIS).
-
-### Modifié
-
-- **Build reproductible** : installeur produit par GitHub Actions (runner
-  Windows public) au lieu d'un build local. Garantit la même chaîne d'outils
-  et permet l'audit.
-- **Workspace lints** : `[workspace.lints]` centralisé dans `Cargo.toml`
-  racine, hérité par tous les crates via `[lints] workspace = true`.
-- **`.gitattributes`** : force LF cross-plateforme (évite que
-  `cargo fmt --check` casse sur CI Windows à cause d'autocrlf).
-- **`cargo fmt --all`** appliqué : 33 fichiers re-formattés selon
-  `rustfmt.toml`.
-
-### Infra OSS
-
-- CI GitHub Actions Windows (`cargo fmt --check`, `cargo test --workspace`,
-  `svelte-check --fail-on-warnings`).
-- Release auto sur tag `v*.*.*` (build NSIS + SHA-256 + sig Ed25519
-  optionnelle + manifest `latest.json` pour auto-updater).
-- Dependabot hebdo (semver-major ignoré, groupes crypto/tokio/windows/...).
-- Templates issues (bug, feature, config) + PR.
-- `CONTRIBUTING.md`, `SECURITY.md` racine, `.editorconfig`, `rustfmt.toml`.
-
-## [Unreleased] — non publié sur GitHub Releases
-
-### Ajouté V3.1 (audio UDP+FEC bout-en-bout, **non testé E2E 2 PCs**)
-
-- **`okvm-udp` crate** (V3 step 0) : Reed-Solomon FEC + AEAD + framing.
-  13 tests dont 5 d'intégration (loopback, packet loss recovery K=4/M=2
-  avec 2 paquets perdus, spray-attack DoS protection, bidirectionnel
-  Arc<UdpSocket> partagé).
-- **Negociation UDP au handshake** (step 1+2) : `ServerFinished.udp_ports`
-  populé, `HandshakeOutcome.udp_keys` dérivé via HKDF epoch=1 (séparé du
-  nonce space TCP epoch=0).
-- **`okvm_net::UdpAudioPipe`** (step 4) : sender + receiver tasks qui
-  bridgent `mpsc<AudioMessage>` ⇄ UDP+FEC chiffré.
-- **NAT pinning auto** (step 7) : `UdpFecReceiver::recv_frame` remonte
-  la `SocketAddr` source, permettant au serveur de découvrir l'endpoint
-  UDP du client sur sa 1ère frame reçue puis renvoyer vers lui.
-- **`Session::start_with_udp`** (step 5+6) : variante qui substitue les
-  channels audio TCP par UDP+FEC. L'API `session.audio_tx/audio_rx` est
-  inchangée → AppState n'a aucune modification.
-- **Listener + Connector** détectent automatiquement la négociation UDP
-  et appellent `start_with_udp` au lieu de `start`. Fallback transparent
-  TCP si le bind UDP échoue.
-
-### Tests
-- Workspace : **86 passing**, 0 ignored, 0 failed, `RUSTFLAGS=-D warnings`.
-- Aucun test **E2E entre 2 vrais PCs** — l'environnement de dev n'a qu'un
-  PC. Tout est validé en loopback.
-
-### À venir (V3.x)
-- **V3.3** : `D3D11Manager` câblé dans `MfH264Encoder` pour NVENC/QSV/AMF.
-  Step 1 (`d3d11_helper.rs`) livré, step 2 (~300 lignes Win32 COM) en attente.
-- **Auto-update** : `tauri-plugin-updater` + clé Ed25519. Config + scripts
-  prêts, plugin à ajouter aux dépendances.
-- **Release v0.1.2** quand V3.1 sera validé sur vrais 2 PCs.
-
-## [0.1.1] — 2026-05-22
-
-Release CI-built reproductible (même comportement que v0.1.0).
-Validation de la pipeline GitHub Actions auto-release. **Audio sur TCP**.
-
-## [Unreleased pre-V3.1] — V3 en cours
-
-### Ajouté
-
-- **PIN flow strict côté serveur** : nouveau mode d'appairage à activer
-  explicitement, génère un PIN à 6 chiffres valide 60 secondes. Toute
-  identité inconnue sans PIN valide est rejetée avec `PairingFailed`.
-  Bannière dédiée dans l'UI avec compte à rebours.
-- **Nouveau crate `okvm-udp`** : transport UDP chiffré (AES-256-GCM) avec
-  Reed-Solomon FEC (codec configurable K + M). Tests d'intégration loopback
-  couvrant duplication K=1/M=1, reconstitution K=4/M=2 avec 2 paquets perdus,
-  et drop gracieux quand trop de paquets sont perdus. Pas encore câblé dans
-  les pipelines audio/vidéo (V3.1).
-- **Détection Media Foundation H.264** : énumération des encodeurs MFT au
-  démarrage, distinction HW/SW. Sur les machines avec NVENC / QuickSync /
-  AMF, c'est loggé et exposé dans AboutView.
-- **Wrapper MFT H.264 encoder** (`MfH264Encoder`) : COM init via OnceLock,
-  pipeline complet `CoCreateInstance(CLSID_CMSH264EncoderMFT)` →
-  `SetOutputType(H264)` → `SetInputType(NV12)` → `NOTIFY_BEGIN_STREAMING` +
-  `NOTIFY_START_OF_STREAM` → `ProcessInput` / `ProcessOutput` loop avec
-  gestion `MF_E_TRANSFORM_NEED_MORE_INPUT`, plus une méthode `drain()` qui
-  émet `COMMAND_DRAIN` pour récupérer les NAL restants. Conversion
-  RGB → NV12 BT.601 limited-range pure Rust incluse. Tests : init, drain
-  d'un keyframe IDR avec start code Annex-B vérifié. L'API publique restera
-  inchangée quand on basculera sur les MFT hardware via D3D11Manager (V3.3).
-- **Scripts release + doc signature** : `scripts/release.ps1` automatise
-  build → signtool Authenticode → SHA-256 → signature Ed25519
-  (`tauri-plugin-updater`) → manifeste `latest.json`. Tout est paramétré par
-  variables d'environnement, et est no-op si rien n'est défini. Procédure
-  complète documentée dans `docs/RELEASE.md`.
-
-### Modifié
-
-- README mentionne maintenant l'auto-détection de la langue Windows.
-- Catalogues i18n élargis : nouvelles clés `pairing.*` pour la bannière
-  d'appairage strict.
-
-### Sécurité (durcissements post code-review)
-
-- **Anti-brute-force PIN** : compteur `failed_attempts` sur `PairingMode` ;
-  le mode d'appairage est désactivé automatiquement après 5 tentatives
-  ratées. Une demande sans PIN compte aussi comme tentative. Le lock est
-  conservé pendant tout le check + l'incrément pour éviter les attaques
-  en parallèle.
-- **Zeroize PIN** : `PairingMode.pin` est wrappé dans `zeroize::Zeroizing<String>`
-  pour effacer la mémoire à la destruction (defense in depth).
-- **Cap pending shards** : `UdpFecReceiver.pending` est plafonné à 256
-  entrées avec éviction FIFO — protège contre une attaque "spray-orphan-shards"
-  qui ferait grossir la map indéfiniment. Mémoire bornée ≈ 8.6 MB pire cas.
-- **MF init unifié** : `mediafoundation::ensure_mf_init()` (OnceLock partagé)
-  remplace les `MFStartup` répétés qui accumulaient des ref-counts internes.
-- **Stabilité du wire-format config** : `H264BackendChoice` utilise
-  `#[serde(rename, alias)]` pour les noms kebab-case + alias PascalCase
-  legacy, permettant de renommer les variantes Rust sans casser les
-  `config.json` existants.
+- PIN flow d'appairage côté serveur en attente d'implémentation stricte
+  (livré en pre-V3.1, intégré dans 0.1.1).
 
 ## Roadmap
 
