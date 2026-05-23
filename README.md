@@ -166,14 +166,23 @@ Tu peux lancer **2 instances OneClick KVM sur la même machine** pour
 valider le scénario complet appairage + KM + audio + écran + fichiers
 sans 2 PC physiques. Variable d'env `OKVM_INSTANCE` isole les configs.
 
-Guide pas-à-pas : [docs/TESTING.md](docs/TESTING.md).
+Le plus rapide (avec `just` installé) :
+
+```powershell
+just dev-alice   # terminal 1
+just dev-bob     # terminal 2
+# OU avec les EXE release post-build
+just run-2       # ouvre 2 fenêtres alice+bob
+```
+
+Guide pas-à-pas + 7 scénarios E2E : [docs/TESTING.md](docs/TESTING.md).
 
 ## Statut
 
 Version actuelle : **0.1.1** (alpha, prêt pour usage personnel sur LAN de confiance).
 
 - ✅ 30+ fonctionnalités implémentées (KM, audio, vidéo, fichiers, clipboard, WoL, etc.)
-- ✅ 86 tests unitaires + intégration passants (`RUSTFLAGS=-D warnings` strict)
+- ✅ 91 tests unitaires + intégration passants (`RUSTFLAGS=-D warnings` strict)
 - ✅ Compile cleanly, build release 17 MB, installeur NSIS 4 MB
 - ✅ Audio routé sur **UDP+FEC** sur git HEAD (V3.1 livré dans le code,
   pas encore inclus dans la release publiée v0.1.1)
