@@ -11,6 +11,21 @@ versions sémantiques [SemVer](https://semver.org/lang/fr/).
 > l'installeur de la release v0.1.1. Validé par tests Rust + loopback,
 > **non testé E2E sur 2 vrais PCs** (l'environnement de dev n'en a qu'un).
 
+### Corrigé — CRASH au boot (régression V3.3)
+
+- **Cause** : `okvm_video::log_hardware_h264_status()` appelait
+  `ensure_mf_init()` qui fait `CoInitializeEx(MULTITHREADED)` **sur le
+  main thread**. Empoisonnait l'apartment COM avant que `tao`
+  (event loop de Tauri) ne tente `OleInitialize(STA)` → panic
+  `RPC_E_CHANGED_MODE` ~3 secondes plus tard. Côté utilisateur : fenêtre
+  s'ouvre brièvement puis l'app crash silencieusement (windows_subsystem
+  = "windows" supprime stdout/stderr en release).
+- **Fix** : `log_hardware_h264_status()` est appelé dans
+  `std::thread::spawn` — le main thread reste libre pour Tauri/STA.
+- **Bonus** : `install_panic_hook()` écrit désormais tout panic +
+  backtrace dans `%LocalAppData%\Temp\oneclick-kvm-crash.log`. Plus de
+  crash invisible. Active `RUST_BACKTRACE=full` automatiquement.
+
 ### Ajouté — V3.1 audio UDP+FEC bout-en-bout
 
 - **`okvm-udp` crate** (V3 step 0) : Reed-Solomon FEC + AEAD + framing.
