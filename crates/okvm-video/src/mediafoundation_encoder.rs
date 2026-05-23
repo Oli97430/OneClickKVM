@@ -50,6 +50,26 @@ use crate::h264::H264Config;
 /// Voir <https://learn.microsoft.com/en-us/windows/win32/medfound/h-264-video-encoder>.
 const CLSID_CMSH264_ENCODER_MFT: GUID = GUID::from_u128(0x6ca50344_051a_4ded_9779_a43305165e35);
 
+/// Type de backend MFT effectivement instancié.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MfBackend {
+    /// `CLSID_CMSH264EncoderMFT` Microsoft software (toujours présent).
+    /// CPU pur, optimisé SSE/AVX. Pas de D3D11 manager.
+    Software,
+    /// MFT hardware sélectionné via `MFTEnumEx(MFT_ENUM_FLAG_HARDWARE)` +
+    /// `IMFActivate::ActivateObject`. Reçoit un `IMFDXGIDeviceManager`
+    /// pour potentiellement utiliser des textures D3D11.
+    ///
+    /// **⚠️ Non validé E2E sur ce projet** : le code COM init compile et
+    /// l'init du MFT renvoie OK sur la machine de dev, mais la validité du
+    /// bitstream H.264 produit n'est testée que par présence d'un start
+    /// code Annex-B — pas par décodage croisé avec un decoder de référence.
+    Hardware {
+        /// Nom convivial du MFT (ex: `"NVIDIA H.264 Encoder MFT"`).
+        friendly_name: String,
+    },
+}
+
 /// Encodeur H.264 utilisant un MFT Microsoft.
 pub struct MfH264Encoder {
     cfg: H264Config,
@@ -60,6 +80,16 @@ pub struct MfH264Encoder {
     frame_index: u64,
     /// Durée d'un frame en unités de 100 ns (HNS).
     frame_duration_hns: i64,
+    /// Backend effectivement utilisé (intéressant pour AboutView et debug).
+    backend: MfBackend,
+    /// Manager D3D11 lié au transform (Some si backend == Hardware).
+    /// Doit rester vivant tant que le transform existe (la doc MF dit que
+    /// le manager peut être référencé par le transform).
+    #[allow(dead_code)]
+    d3d_manager: Option<windows::Win32::Media::MediaFoundation::IMFDXGIDeviceManager>,
+    /// D3D11 device tenu vivant pour la même raison.
+    #[allow(dead_code)]
+    d3d_device: Option<crate::d3d11_helper::D3D11Resources>,
 }
 
 // SAFETY: l'encodeur est créé et utilisé exclusivement sur le thread de capture
@@ -77,7 +107,223 @@ fn ensure_com_mf_init() -> Result<()> {
     ensure_mf_init().map_err(Error::other)
 }
 
+/// Lit l'attribut `MFT_FRIENDLY_NAME_Attribute` d'un `IMFActivate`.
+fn read_friendly_name(
+    act: &windows::Win32::Media::MediaFoundation::IMFActivate,
+    attr_guid: &windows::core::GUID,
+) -> String {
+    use windows::Win32::System::Com::CoTaskMemFree;
+    // SAFETY: GetAllocatedString alloue une wide string via CoTaskMemAlloc.
+    unsafe {
+        let mut buf_ptr: windows::core::PWSTR = windows::core::PWSTR(std::ptr::null_mut());
+        let mut len: u32 = 0;
+        if act
+            .GetAllocatedString(attr_guid, &mut buf_ptr, &mut len)
+            .is_err()
+            || buf_ptr.0.is_null()
+        {
+            return "<unnamed>".into();
+        }
+        let slice = std::slice::from_raw_parts(buf_ptr.0, len as usize);
+        let s = String::from_utf16_lossy(slice);
+        let _ = CoTaskMemFree(Some(buf_ptr.0.cast()));
+        s
+    }
+}
+
 impl MfH264Encoder {
+    /// Backend MFT effectivement utilisé pour cet encodeur.
+    #[must_use]
+    pub fn backend(&self) -> &MfBackend {
+        &self.backend
+    }
+
+    /// Tente d'instancier l'encodeur sur un MFT **hardware** (NVENC / QuickSync
+    /// / AMF) via `MFTEnumEx` filtré sur `MFT_ENUM_FLAG_HARDWARE` + sortie
+    /// H.264. Si plusieurs hardware encoders sont disponibles, prend le
+    /// **premier** (l'ordre dépend du driver — typiquement NVIDIA en premier
+    /// sur les GPUs gaming).
+    ///
+    /// Plus complexe que [`Self::new`] :
+    /// - Nécessite un D3D11 device + `IMFDXGIDeviceManager`
+    /// - Bascule potentielle vers async-mode (non géré ici → erreur explicite)
+    /// - Output format H.264 NV12 via le canal D3D si possible
+    ///
+    /// **⚠️ Honnêteté** : ce code compile et l'init succède sur la machine
+    /// de dev, mais l'output H.264 hardware n'a PAS été décodé / comparé à
+    /// un golden file. La validité du bitstream est présumée (start code
+    /// Annex-B vérifié, c'est tout). Le test E2E sur 2 vrais PCs reste à faire.
+    ///
+    /// # Erreurs
+    /// Init D3D11, énumération MFT, ActivateObject, async-mode non supporté.
+    pub fn try_new_hardware(cfg: H264Config) -> Result<Self> {
+        use windows::Win32::Media::MediaFoundation::{
+            IMFActivate, IMFAttributes, MFTEnumEx, MFT_FRIENDLY_NAME_Attribute,
+            MFT_CATEGORY_VIDEO_ENCODER, MFT_ENUM_FLAG_HARDWARE, MFT_ENUM_FLAG_SORTANDFILTER,
+            MFT_MESSAGE_SET_D3D_MANAGER, MFT_REGISTER_TYPE_INFO, MF_TRANSFORM_ASYNC,
+        };
+
+        ensure_com_mf_init()?;
+
+        // Crée D3D11 device + DXGI manager AVANT d'énumérer — si le device
+        // ne se crée pas (VM sans GPU passthrough), pas la peine d'essayer
+        // un MFT hardware.
+        let d3d = crate::d3d11_helper::create_d3d11_device()
+            .map_err(|e| Error::other(format!("hardware MFT requires D3D11: {e}")))?;
+        let dxgi_mgr = crate::d3d11_helper::create_dxgi_manager(&d3d.device)?;
+
+        // Enumere les MFT video encoder hardware avec sortie H.264.
+        let out_info = MFT_REGISTER_TYPE_INFO {
+            guidMajorType: MFMediaType_Video,
+            guidSubtype: MFVideoFormat_H264,
+        };
+        let flags = MFT_ENUM_FLAG_HARDWARE | MFT_ENUM_FLAG_SORTANDFILTER;
+        let mut count: u32 = 0;
+        let mut activates: *mut Option<IMFActivate> = std::ptr::null_mut();
+        // SAFETY: MFTEnumEx alloue activates via CoTaskMemAlloc, à libérer ensuite.
+        unsafe {
+            MFTEnumEx(
+                MFT_CATEGORY_VIDEO_ENCODER,
+                flags,
+                None,
+                Some(&out_info),
+                &mut activates,
+                &mut count,
+            )
+            .map_err(|e| Error::other(format!("MFTEnumEx(HARDWARE): {e}")))?;
+        }
+        if count == 0 || activates.is_null() {
+            return Err(Error::other("aucun MFT hardware H.264 disponible"));
+        }
+
+        // Prend le premier MFT hardware. SAFETY: activates[0] est un Option<IMFActivate>.
+        let activate = unsafe {
+            (*activates).as_ref().cloned().ok_or_else(|| {
+                let _ = windows::Win32::System::Com::CoTaskMemFree(Some(activates.cast()));
+                Error::other("activate[0] est null")
+            })?
+        };
+
+        // Récupère le nom convivial pour le log.
+        let friendly_name = read_friendly_name(&activate, &MFT_FRIENDLY_NAME_Attribute);
+
+        // Libère le tableau alloué par MFTEnumEx (les autres slots sont droppés via Option::take).
+        // SAFETY: activates a été alloué par MFTEnumEx via CoTaskMemAlloc ;
+        // on a déjà cloné le premier IMFActivate (refcount++), on peut donc
+        // libérer le tableau et tous ses slots restants.
+        unsafe {
+            for i in 0..count as isize {
+                let _ = (*activates.offset(i)).take();
+            }
+            let _ = windows::Win32::System::Com::CoTaskMemFree(Some(activates.cast()));
+        }
+
+        // Active le MFT.
+        let transform: IMFTransform = unsafe {
+            activate
+                .ActivateObject::<IMFTransform>()
+                .map_err(|e| Error::other(format!("ActivateObject({friendly_name}): {e}")))?
+        };
+
+        // Détecte le mode async. Les MFT hardware sont souvent async par défaut.
+        // Pour V3.3 step 2, on refuse async (le wrapping async demanderait un
+        // event loop, ~150 lignes de plus). Force sync via MF_TRANSFORM_ASYNC_UNLOCK
+        // si possible, sinon Err.
+        let attrs: IMFAttributes = unsafe {
+            transform
+                .GetAttributes()
+                .map_err(|e| Error::other(format!("GetAttributes: {e}")))?
+        };
+        let is_async = unsafe { attrs.GetUINT32(&MF_TRANSFORM_ASYNC).unwrap_or(0) } != 0;
+        if is_async {
+            // Tente de forcer le mode sync (UNLOCK = 0 ne marche pas, certains
+            // MFTs requièrent UNLOCK=1 pour pouvoir parler avec l'API
+            // synchrone). Si setval échoue, abandonne — caller doit fallback SW.
+            let _ = unsafe {
+                attrs.SetUINT32(
+                    &windows::Win32::Media::MediaFoundation::MF_TRANSFORM_ASYNC_UNLOCK,
+                    1,
+                )
+            };
+            tracing::warn!(
+                name = %friendly_name,
+                "MFT hardware en async-mode — wiring async non implémenté en V3.3 step 2"
+            );
+            return Err(Error::other(format!(
+                "MFT hardware {friendly_name} en async-mode, non supporté (fallback SW recommandé)"
+            )));
+        }
+
+        // Set le D3D manager — permet au MFT d'allouer des textures D3D11.
+        // SAFETY: dxgi_mgr est vivant ; ProcessMessage prend un usize qui doit
+        // être un pointeur vers IUnknown du manager.
+        use windows::core::Interface;
+        let mgr_ptr = dxgi_mgr.as_raw() as usize;
+        unsafe {
+            transform
+                .ProcessMessage(MFT_MESSAGE_SET_D3D_MANAGER, mgr_ptr)
+                .map_err(|e| Error::other(format!("SET_D3D_MANAGER: {e}")))?;
+        }
+
+        // === À partir d'ici : même setup que SW ===
+        let output_type = create_output_type_h264(&cfg)?;
+        unsafe {
+            transform
+                .SetOutputType(0, &output_type, 0)
+                .map_err(|e| Error::other(format!("SetOutputType (HW): {e}")))?;
+        }
+        let input_type = create_input_type_nv12(&cfg)?;
+        unsafe {
+            transform
+                .SetInputType(0, &input_type, 0)
+                .map_err(|e| Error::other(format!("SetInputType (HW): {e}")))?;
+        }
+        unsafe {
+            transform
+                .ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, 0)
+                .map_err(|e| Error::other(format!("BEGIN_STREAMING (HW): {e}")))?;
+            transform
+                .ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0)
+                .map_err(|e| Error::other(format!("START_OF_STREAM (HW): {e}")))?;
+        }
+
+        let nv12_size = (cfg.width as usize) * (cfg.height as usize) * 3 / 2;
+        let frame_duration_hns = (10_000_000_i64 / i64::from(cfg.target_fps.max(1))).max(1);
+
+        tracing::info!(name = %friendly_name, "MfH264Encoder HARDWARE activé");
+
+        Ok(Self {
+            cfg,
+            transform,
+            nv12_buf: vec![0u8; nv12_size],
+            frame_index: 0,
+            frame_duration_hns,
+            backend: MfBackend::Hardware { friendly_name },
+            d3d_manager: Some(dxgi_mgr),
+            d3d_device: Some(d3d),
+        })
+    }
+
+    /// Tente d'instancier le **meilleur** encodeur disponible :
+    /// 1. [`Self::try_new_hardware`] (NVENC/QSV/AMF si OS support)
+    /// 2. [`Self::new`] (MFT Microsoft software) en fallback
+    ///
+    /// Le caller peut interroger [`Self::backend`] pour savoir lequel a été
+    /// retenu et l'afficher dans l'UI.
+    ///
+    /// # Erreurs
+    /// Seulement si AUCUN backend ne marche (improbable sur W10/11 où le
+    /// MFT software est toujours présent).
+    pub fn new_best(cfg: H264Config) -> Result<Self> {
+        match Self::try_new_hardware(cfg) {
+            Ok(enc) => Ok(enc),
+            Err(e) => {
+                tracing::info!(error = %e, "MFT hardware indisponible, fallback software");
+                Self::new(cfg)
+            }
+        }
+    }
+
     /// Crée et configure un encodeur H.264 via le MFT Microsoft software.
     ///
     /// # Erreurs
@@ -133,6 +379,9 @@ impl MfH264Encoder {
             nv12_buf: vec![0u8; nv12_size],
             frame_index: 0,
             frame_duration_hns,
+            backend: MfBackend::Software,
+            d3d_manager: None,
+            d3d_device: None,
         })
     }
 
@@ -509,6 +758,31 @@ pub fn rgb_to_nv12(rgb: &[u8], width: usize, height: usize, out: &mut [u8]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn new_best_succeeds_on_either_backend() {
+        // Honnêteté : ce test n'affirme PAS que le hardware encode produit
+        // un bitstream valide. Il vérifie juste que new_best() retourne un
+        // encoder fonctionnel — soit hardware si dispo (puis on logge lequel),
+        // soit fallback software. Sur runner CI sans GPU, on tombe sur SW.
+        let cfg = H264Config {
+            width: 320,
+            height: 240,
+            target_fps: 15,
+            bitrate_kbps: 500,
+        };
+        let enc = MfH264Encoder::new_best(cfg).expect("au moins SW doit marcher");
+        match enc.backend() {
+            MfBackend::Software => {
+                eprintln!("backend = Software (Microsoft CLSID_CMSH264EncoderMFT)");
+            }
+            MfBackend::Hardware { friendly_name } => {
+                eprintln!("backend = Hardware ({friendly_name})");
+                // Sur la machine de dev avec NVIDIA, ce path s'exécute. Pas
+                // de vérification de la qualité du bitstream encore.
+            }
+        }
+    }
 
     #[test]
     fn encoder_init() {
