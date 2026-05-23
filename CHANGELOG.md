@@ -7,9 +7,13 @@ versions sémantiques [SemVer](https://semver.org/lang/fr/).
 
 ## [Unreleased] — non publié sur GitHub Releases
 
-> ⚠️ **Statut** : tout ce qui suit vit dans `main` mais n'est PAS dans
-> l'installeur de la release v0.1.1. Validé par tests Rust + loopback,
-> **non testé E2E sur 2 vrais PCs** (l'environnement de dev n'en a qu'un).
+(rien pour l'instant — voir [0.1.2] ci-dessous)
+
+## [0.1.2] — 2026-05-23
+
+**Bugfix release** : corrige un crash silencieux au boot introduit par
+la V3.3 dans `main` post-v0.1.1. **Recommandée pour tous les utilisateurs**
+qui ont essayé un build récent et ont vu l'app planter au lancement.
 
 ### Corrigé — CRASH au boot (régression V3.3)
 
@@ -25,6 +29,76 @@ versions sémantiques [SemVer](https://semver.org/lang/fr/).
 - **Bonus** : `install_panic_hook()` écrit désormais tout panic +
   backtrace dans `%LocalAppData%\Temp\oneclick-kvm-crash.log`. Plus de
   crash invisible. Active `RUST_BACKTRACE=full` automatiquement.
+
+### Ajouté — depuis 0.1.1 (consolidation du backlog `main`)
+
+> Validé par tests Rust + loopback, **non testé E2E sur 2 vrais PCs**.
+
+#### V3.1 audio UDP+FEC bout-en-bout
+
+- `okvm-udp` crate : Reed-Solomon FEC + AEAD + framing (13 tests).
+- Négociation UDP au handshake (`ServerFinished.udp_ports` + HKDF
+  epoch=1 séparé du TCP epoch=0).
+- `okvm_net::UdpAudioPipe` : sender + receiver tasks qui bridgent
+  `mpsc<AudioMessage>` ⇄ UDP+FEC chiffré.
+- NAT pinning auto : `UdpFecReceiver::recv_frame` remonte la
+  `SocketAddr`, le serveur pin l'endpoint UDP au 1er decrypt réussi.
+- `Session::start_with_udp` + Listener + Connector auto-détection
+  (fallback transparent TCP si bind UDP échoue).
+
+#### V3.3 chemin MFT hardware (limité)
+
+- `d3d11_helper.rs` : `D3D11Resources` + `IMFDXGIDeviceManager`.
+- `MfH264Encoder::try_new_hardware` : itère `MFTEnumEx(HARDWARE)`,
+  prend le 1er sync. `MFT_MESSAGE_SET_D3D_MANAGER` avant config.
+- `MfH264Encoder::new_best` : HW puis fallback software.
+- `probe_best_backend` : diagnostic non bloquant pour AboutView,
+  cache `OnceLock` process-wide.
+- `enumerate_h264_encoders.is_async_mode` exposé pour diagnostic.
+
+> ⚠️ **Honnêteté technique** : sur la machine de dev, les 3 MFTs hardware
+> trouvés (AMD, NVIDIA, Microsoft AVC DX12) sont tous en mode async. Seul
+> Microsoft AVC DX12 est sync — c'est lui qui est sélectionné. NVENC/AMF
+> réels nécessitent V3.3.1 (event loop `METransform*` events — pas livré).
+
+#### Multi-instance test local
+
+- `OKVM_INSTANCE` env var → `%APPDATA%\OneClick\OneClickKVM-{name}\config\`.
+- Sanitisation `[a-zA-Z0-9_-]{,32}` + refus des noms DOS réservés
+  (`CON`, `PRN`, `AUX`, `NUL`, `COM1-9`, `LPT1-9`).
+- Recettes `just dev-alice`, `dev-bob`, `run-2`, `clean-test-configs`.
+- Guide complet : `docs/TESTING.md` (7 scénarios E2E).
+
+#### Polish UI
+
+- Dropdown sélecteur de moniteur dans Settings vidéo
+  (`video_screen_idx` persisté).
+- Hot-rejoin : sessions mortes nettoyées après 5 s (vs 15 s avant).
+
+### Corrigé — Review code post V3.1
+
+- #1 UDP audio dead-lock (lazy-init `UdpFecSender` + re-check pin chaque
+  frame — plus de drain-and-drop permanent si pin tardif).
+- #2 TCP audio skew warn-once.
+- #4 `UdpAudioError::MissingUdpKeys` (erreur claire vs `BadParams{0,0}`).
+- #6 Refuse les noms DOS réservés dans `OKVM_INSTANCE`.
+- #9 Cache `OnceLock` pour `probe_best_backend` (~10-50 ms économisés).
+- #10 Doc explicite du timing read-at-call de `OKVM_INSTANCE`.
+
+### Nettoyé — dead code
+
+- Supprime `PIN_TIMEOUT` (obsolète depuis fix #1), module `bytes16`
+  (0 callers), `Arc<Notify> pin_notify*` (sender re-check direct).
+
+### Tests
+- Workspace : **91 passing**, 2 ignored, 0 failed, `RUSTFLAGS=-D warnings`.
+- 1 test d'intégration UDP audio bout-en-bout en loopback (régression #1).
+- Aucun test **E2E entre 2 vrais PCs** — env de dev mono-machine.
+
+### À venir
+- **V3.3.1** : event loop async-mode MFT (vrai NVENC/AMF/QSV).
+- **Auto-update Tauri** : `tauri-plugin-updater` non câblé (différé,
+  cohérent avec "pas de cert" choisi).
 
 ### Ajouté — V3.1 audio UDP+FEC bout-en-bout
 
