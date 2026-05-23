@@ -103,7 +103,7 @@ pnpm tauri:build
 Tests :
 
 ```bash
-# Tous les crates Rust (62 tests, dont 1 test d'intégration loopback handshake)
+# Tous les crates Rust (86 tests, dont tests d'intégration loopback handshake + UDP+FEC)
 cd oneclick-kvm
 cargo test --workspace
 
@@ -165,12 +165,17 @@ Problèmes courants → [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
 Version actuelle : **0.1.1** (alpha, prêt pour usage personnel sur LAN de confiance).
 
 - ✅ 30+ fonctionnalités implémentées (KM, audio, vidéo, fichiers, clipboard, WoL, etc.)
-- ✅ 83 tests unitaires + intégration passants
+- ✅ 86 tests unitaires + intégration passants (`RUSTFLAGS=-D warnings` strict)
 - ✅ Compile cleanly, build release 17 MB, installeur NSIS 4 MB
+- ✅ Audio routé sur **UDP+FEC** sur git HEAD (V3.1 livré dans le code,
+  pas encore inclus dans la release publiée v0.1.1)
+- ⚠️ **Pas testé E2E sur 2 vrais PCs** — l'app a tourné côté UI mais
+  jamais en condition d'appairage / partage réels. Tous les tests sont
+  loopback (un process talking to itself sur 127.0.0.1).
 - ⚠️ Pas de signature Authenticode (cf. note ci-dessus) — SmartScreen avertit,
   vérifier le SHA-256 publié sur la release
-- ⚠️ Vidéo en software H.264 (CPU) — V3 ajoutera Media Foundation hardware
-- ⚠️ Audio en TCP (V3 → UDP + FEC pour basse latence)
+- ⚠️ Vidéo en software H.264 (CPU) — V3.3 ajoutera Media Foundation hardware
+- ⚠️ Release publiée v0.1.1 = audio TCP. UDP+FEC sera dans v0.1.2.
 
 ## Roadmap V3
 

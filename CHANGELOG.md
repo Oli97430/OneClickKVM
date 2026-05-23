@@ -142,7 +142,47 @@ par rapport à v0.1.0 ; valide le pipeline GitHub Actions
 - Templates issues (bug, feature, config) + PR.
 - `CONTRIBUTING.md`, `SECURITY.md` racine, `.editorconfig`, `rustfmt.toml`.
 
-## [Unreleased] — V3 en cours
+## [Unreleased] — non publié sur GitHub Releases
+
+### Ajouté V3.1 (audio UDP+FEC bout-en-bout, **non testé E2E 2 PCs**)
+
+- **`okvm-udp` crate** (V3 step 0) : Reed-Solomon FEC + AEAD + framing.
+  13 tests dont 5 d'intégration (loopback, packet loss recovery K=4/M=2
+  avec 2 paquets perdus, spray-attack DoS protection, bidirectionnel
+  Arc<UdpSocket> partagé).
+- **Negociation UDP au handshake** (step 1+2) : `ServerFinished.udp_ports`
+  populé, `HandshakeOutcome.udp_keys` dérivé via HKDF epoch=1 (séparé du
+  nonce space TCP epoch=0).
+- **`okvm_net::UdpAudioPipe`** (step 4) : sender + receiver tasks qui
+  bridgent `mpsc<AudioMessage>` ⇄ UDP+FEC chiffré.
+- **NAT pinning auto** (step 7) : `UdpFecReceiver::recv_frame` remonte
+  la `SocketAddr` source, permettant au serveur de découvrir l'endpoint
+  UDP du client sur sa 1ère frame reçue puis renvoyer vers lui.
+- **`Session::start_with_udp`** (step 5+6) : variante qui substitue les
+  channels audio TCP par UDP+FEC. L'API `session.audio_tx/audio_rx` est
+  inchangée → AppState n'a aucune modification.
+- **Listener + Connector** détectent automatiquement la négociation UDP
+  et appellent `start_with_udp` au lieu de `start`. Fallback transparent
+  TCP si le bind UDP échoue.
+
+### Tests
+- Workspace : **86 passing**, 0 ignored, 0 failed, `RUSTFLAGS=-D warnings`.
+- Aucun test **E2E entre 2 vrais PCs** — l'environnement de dev n'a qu'un
+  PC. Tout est validé en loopback.
+
+### À venir (V3.x)
+- **V3.3** : `D3D11Manager` câblé dans `MfH264Encoder` pour NVENC/QSV/AMF.
+  Step 1 (`d3d11_helper.rs`) livré, step 2 (~300 lignes Win32 COM) en attente.
+- **Auto-update** : `tauri-plugin-updater` + clé Ed25519. Config + scripts
+  prêts, plugin à ajouter aux dépendances.
+- **Release v0.1.2** quand V3.1 sera validé sur vrais 2 PCs.
+
+## [0.1.1] — 2026-05-22
+
+Release CI-built reproductible (même comportement que v0.1.0).
+Validation de la pipeline GitHub Actions auto-release. **Audio sur TCP**.
+
+## [Unreleased pre-V3.1] — V3 en cours
 
 ### Ajouté
 
