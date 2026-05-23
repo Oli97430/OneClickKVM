@@ -2,6 +2,7 @@
 
 use std::collections::{BTreeMap, VecDeque};
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use tokio::net::UdpSocket;
@@ -61,8 +62,11 @@ impl PendingFrame {
 const MAX_PENDING_FRAMES: usize = 256;
 
 /// Réception UDP+FEC pour un peer donné.
+///
+/// Le socket est en `Arc<UdpSocket>` pour permettre de partager le même
+/// socket avec un [`crate::UdpFecSender`] (bidirectionnel sur un seul port).
 pub struct UdpFecReceiver {
-    socket: UdpSocket,
+    socket: Arc<UdpSocket>,
     expected_remote: Option<SocketAddr>,
     aead: AeadSession,
     /// Codec partagé (K, M négociés au handshake).
@@ -93,13 +97,13 @@ impl UdpFecReceiver {
     /// les tests loopback).
     #[must_use]
     pub fn new(
-        socket: UdpSocket,
+        socket: impl Into<Arc<UdpSocket>>,
         expected_remote: Option<SocketAddr>,
         aead: AeadSession,
         fec: FecCodec,
     ) -> Self {
         Self {
-            socket,
+            socket: socket.into(),
             expected_remote,
             aead,
             fec,

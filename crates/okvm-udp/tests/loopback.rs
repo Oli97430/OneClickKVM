@@ -14,6 +14,74 @@ fn make_aead_pair() -> (AeadSession, AeadSession) {
 }
 
 #[tokio::test]
+async fn shared_arc_socket_bidirectional() {
+    // Démontre qu'un même socket physique peut servir à la fois sender et
+    // receiver via Arc<UdpSocket> — pattern utilisé côté serveur où on bind
+    // une seule port pour les deux sens d'une session.
+    use std::sync::Arc;
+
+    let alice = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
+    let bob = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
+    let alice_addr = alice.local_addr().unwrap();
+    let bob_addr = bob.local_addr().unwrap();
+
+    let (alice_send_aead, alice_recv_aead) = make_aead_pair();
+    let (bob_send_aead, bob_recv_aead) = make_aead_pair();
+
+    // Alice : peut envoyer ET recevoir sur son socket simultanément.
+    let mut alice_tx = UdpFecSender::new(
+        alice.clone(),
+        bob_addr,
+        alice_send_aead,
+        FecCodec::new(1, 1).unwrap(),
+    );
+    let mut alice_rx = UdpFecReceiver::new(
+        alice,
+        Some(bob_addr),
+        alice_recv_aead,
+        FecCodec::new(1, 1).unwrap(),
+    );
+
+    let mut bob_tx = UdpFecSender::new(
+        bob.clone(),
+        alice_addr,
+        bob_send_aead,
+        FecCodec::new(1, 1).unwrap(),
+    );
+    let mut bob_rx = UdpFecReceiver::new(
+        bob,
+        Some(alice_addr),
+        bob_recv_aead,
+        FecCodec::new(1, 1).unwrap(),
+    );
+
+    // Bob envoie 2 frames vers Alice, Alice envoie 2 frames vers Bob — tout
+    // en parallèle, le même socket sert dans les 2 directions.
+    let alice_recv = tokio::spawn(async move {
+        let f1 = alice_rx.recv_frame().await.unwrap();
+        let f2 = alice_rx.recv_frame().await.unwrap();
+        (f1, f2)
+    });
+    let bob_recv = tokio::spawn(async move {
+        let f1 = bob_rx.recv_frame().await.unwrap();
+        let f2 = bob_rx.recv_frame().await.unwrap();
+        (f1, f2)
+    });
+
+    bob_tx.send_frame(b"bob -> alice #1").await.unwrap();
+    alice_tx.send_frame(b"alice -> bob #1").await.unwrap();
+    bob_tx.send_frame(b"bob -> alice #2").await.unwrap();
+    alice_tx.send_frame(b"alice -> bob #2").await.unwrap();
+
+    let (a1, a2) = alice_recv.await.unwrap();
+    let (b1, b2) = bob_recv.await.unwrap();
+    assert_eq!(a1, b"bob -> alice #1");
+    assert_eq!(a2, b"bob -> alice #2");
+    assert_eq!(b1, b"alice -> bob #1");
+    assert_eq!(b2, b"alice -> bob #2");
+}
+
+#[tokio::test]
 async fn loopback_round_trip_k1_m1() {
     let server = UdpSocket::bind("127.0.0.1:0").await.unwrap();
     let client = UdpSocket::bind("127.0.0.1:0").await.unwrap();

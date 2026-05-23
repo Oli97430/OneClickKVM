@@ -1,6 +1,7 @@
 //! [`UdpFecSender`] : encrypte un frame, FEC-encode, et envoie N shards UDP.
 
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 use tokio::net::UdpSocket;
 
@@ -27,8 +28,13 @@ pub enum SendError {
 }
 
 /// Encoder/émetteur UDP+FEC pour un peer donné.
+///
+/// Le socket est stocké en `Arc<UdpSocket>` pour permettre de partager le
+/// même socket physique entre un sender et un [`crate::UdpFecReceiver`] —
+/// nécessaire quand une session bidirectionnelle utilise un seul port UDP
+/// (ce qui est le cas typique server-side après bind du port advertise).
 pub struct UdpFecSender {
-    socket: UdpSocket,
+    socket: Arc<UdpSocket>,
     remote: SocketAddr,
     aead: AeadSession,
     fec: FecCodec,
@@ -37,10 +43,19 @@ pub struct UdpFecSender {
 impl UdpFecSender {
     /// Construit un sender lié à `socket`, envoyant vers `remote`, avec la
     /// session AEAD `aead` (côté envoi) et le codec FEC `fec`.
+    ///
+    /// Accepte n'importe quoi qui se convertit en `Arc<UdpSocket>` : passez
+    /// soit un `UdpSocket` directement (consommé), soit un `Arc<UdpSocket>`
+    /// déjà partagé avec un receiver.
     #[must_use]
-    pub fn new(socket: UdpSocket, remote: SocketAddr, aead: AeadSession, fec: FecCodec) -> Self {
+    pub fn new(
+        socket: impl Into<Arc<UdpSocket>>,
+        remote: SocketAddr,
+        aead: AeadSession,
+        fec: FecCodec,
+    ) -> Self {
         Self {
-            socket,
+            socket: socket.into(),
             remote,
             aead,
             fec,
