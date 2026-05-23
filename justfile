@@ -4,6 +4,10 @@
 #
 # https://just.systems
 
+# Force PowerShell pour toutes les recettes (le défaut Windows est cmd.exe
+# qui ne sait pas faire `$env:VAR = "x"` ni les pipes Windows modernes).
+set shell := ["powershell", "-NoLogo", "-Command"]
+
 # Liste les recettes disponibles (alias par défaut).
 default:
     @just --list
@@ -13,6 +17,36 @@ default:
 # Lance l'app en mode dev avec hot-reload Vite + Tauri.
 dev:
     cd app && pnpm tauri dev
+
+# === Test E2E mono-machine (2 instances) ====================================
+# Lance "alice" en mode dev avec OKVM_INSTANCE=alice et bind par défaut [::]:47101.
+# Voir docs/TESTING.md pour le scénario complet.
+dev-alice:
+    $env:OKVM_INSTANCE = "alice"; cd app; pnpm tauri dev
+
+# Lance "bob" en mode dev avec OKVM_INSTANCE=bob et bind suggéré [::]:47102.
+# Important : avant le 1er lancement, ouvrir Settings côté Bob et changer
+# bind_addr à [::]:47102 (sinon collision de port avec Alice). Une seule
+# fois — la config est persistée dans %APPDATA%/OneClickKVM-bob/.
+dev-bob:
+    $env:OKVM_INSTANCE = "bob"; cd app; pnpm tauri dev
+
+# Lance les EXE release (post `just build`) en 2 instances "alice" et "bob".
+# Évite de recompiler à chaque fois. Le binaire est trouvé via le nom NSIS-bundle.
+run-2:
+    @echo "Démarre Alice dans une fenêtre PowerShell séparée…"
+    Start-Process powershell -ArgumentList "-NoExit","-Command","`$env:OKVM_INSTANCE='alice'; & 'app/src-tauri/target/x86_64-pc-windows-msvc/release/oneclick-kvm-app.exe'"
+    @echo "Démarre Bob dans une seconde fenêtre…"
+    Start-Process powershell -ArgumentList "-NoExit","-Command","`$env:OKVM_INSTANCE='bob'; & 'app/src-tauri/target/x86_64-pc-windows-msvc/release/oneclick-kvm-app.exe'"
+    @echo "Les 2 instances tournent en parallèle. Voir docs/TESTING.md pour les 7 scénarios."
+
+# Nettoie les configs des instances de test (alice + bob).
+clean-test-configs:
+    @echo "Suppression de %APPDATA%/OneClickKVM-alice et OneClickKVM-bob..."
+    if (Test-Path "$env:APPDATA/OneClickKVM-alice") { Remove-Item -Recurse -Force "$env:APPDATA/OneClickKVM-alice" }
+    if (Test-Path "$env:APPDATA/OneClickKVM-bob") { Remove-Item -Recurse -Force "$env:APPDATA/OneClickKVM-bob" }
+    @echo "✓ configs alice/bob nettoyées (la config par défaut OneClickKVM/ reste intacte)"
+
 
 # Build l'installeur NSIS release (4 MB, install per-user).
 build:

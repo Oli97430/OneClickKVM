@@ -34,16 +34,32 @@ Sanitisation : seuls `[a-zA-Z0-9_-]` sont conservés (max 32 chars). Donc
 
 ## Setup recommandé : Alice + Bob
 
-### Ouvrir 2 terminaux PowerShell
+### Option 1 — via `just` (recommandé)
+
+```powershell
+# Terminal 1
+just dev-alice
+
+# Terminal 2 (autre fenêtre)
+just dev-bob
+```
+
+Ou en une commande, **2 instances release** en parallèle :
+
+```powershell
+just run-2  # ouvre 2 fenêtres PowerShell avec les 2 instances release
+```
+
+### Option 2 — manuel
 
 #### Terminal 1 — Alice
 
 ```powershell
 $env:OKVM_INSTANCE = "alice"
-# Lancer l'EXE installé OU pnpm tauri dev OU le binaire release direct.
+# Soit l'EXE installé via NSIS :
 & "C:\Users\$env:USERNAME\AppData\Local\OneClick KVM\OneClick KVM.exe"
-# OU en dev :
-# cd F:\ONECLICK KVM\app ; pnpm tauri dev
+# Soit en mode dev :
+cd F:\ONECLICK KVM\app ; pnpm tauri dev
 ```
 
 #### Terminal 2 — Bob
@@ -52,6 +68,14 @@ $env:OKVM_INSTANCE = "alice"
 $env:OKVM_INSTANCE = "bob"
 & "C:\Users\$env:USERNAME\AppData\Local\OneClick KVM\OneClick KVM.exe"
 ```
+
+### Reset des configs de test
+
+```powershell
+just clean-test-configs  # supprime %APPDATA%/OneClickKVM-alice + bob
+```
+
+La config par défaut `OneClickKVM/` (sans suffixe) reste intacte.
 
 ### Configurer des ports différents
 
