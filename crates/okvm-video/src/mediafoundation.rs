@@ -75,6 +75,11 @@ pub struct H264EncoderInfo {
     pub friendly_name: String,
     /// `true` si l'encodeur est marqué matériel.
     pub is_hardware: bool,
+    /// `true` si l'attribut `MF_TRANSFORM_ASYNC` est set sur le MFT.
+    /// Les MFTs hardware NVENC, AMF, Quick Sync sur les GPUs récents sont
+    /// **typiquement en async-mode obligatoire** — le wrapping demande un
+    /// event loop dédié (cf. V3.3.1 backlog).
+    pub is_async_mode: bool,
 }
 
 /// Énumère les encodeurs H.264 disponibles sur cette machine.
@@ -117,12 +122,14 @@ pub fn enumerate_h264_encoders() -> Result<Vec<H264EncoderInfo>, String> {
         let Some(act) = act_opt else {
             continue;
         };
-        // Récupère friendly name et flag hardware via GetAllocatedString.
+        // Récupère friendly name + flag hardware + flag async-mode.
         let name = read_friendly_name(act);
         let is_hardware = check_hardware_flag(act);
+        let is_async_mode = check_async_flag(act);
         out.push(H264EncoderInfo {
             friendly_name: name,
             is_hardware,
+            is_async_mode,
         });
     }
 
@@ -192,24 +199,55 @@ fn check_hardware_flag(act: &IMFActivate) -> bool {
     }
 }
 
-/// Probabilité qu'un encodage H.264 hardware soit disponible, loggée au démarrage.
+/// Vérifie si l'attribut `MF_TRANSFORM_ASYNC` est présent et = 1. Permet
+/// de détecter en amont si un MFT requerra le wrapping event-loop (NVENC
+/// récents, AMF, Intel Arc QSV...) avant même de l'instancier.
+#[cfg(windows)]
+fn check_async_flag(act: &IMFActivate) -> bool {
+    use windows::Win32::Media::MediaFoundation::MF_TRANSFORM_ASYNC;
+    // SAFETY: GetUINT32 renvoie une erreur si l'attribut n'existe pas.
+    unsafe { act.GetUINT32(&MF_TRANSFORM_ASYNC).unwrap_or(0) != 0 }
+}
+
+/// Logge la disponibilité des encodeurs H.264 au démarrage, avec leur
+/// classification hardware/software + sync/async. Permet à l'utilisateur
+/// de comprendre **pourquoi** un MFT hardware peut être détecté mais pas
+/// utilisé en pratique (V3.3 n'implémente pas le wrapping async-mode).
 /// Appel best-effort : aucune erreur n'est propagée.
 pub fn log_hardware_h264_status() {
     match enumerate_h264_encoders() {
         Ok(encoders) => {
             let hw_count = encoders.iter().filter(|e| e.is_hardware).count();
+            let hw_sync = encoders
+                .iter()
+                .filter(|e| e.is_hardware && !e.is_async_mode)
+                .count();
             let sw_count = encoders.len() - hw_count;
             tracing::info!(
-                hw = hw_count,
+                hw_total = hw_count,
+                hw_sync,
+                hw_async = hw_count - hw_sync,
                 sw = sw_count,
                 "Encodeurs H.264 détectés via Media Foundation"
             );
-            for e in encoders {
+            for e in &encoders {
+                let mode = if e.is_async_mode { "async" } else { "sync" };
                 if e.is_hardware {
-                    tracing::info!(name = %e.friendly_name, "MF H264 hardware");
+                    tracing::info!(
+                        name = %e.friendly_name,
+                        mode,
+                        "MF H264 hardware (async-mode → non utilisable en V3.3, cf. V3.3.1)"
+                    );
                 } else {
-                    tracing::debug!(name = %e.friendly_name, "MF H264 software");
+                    tracing::debug!(name = %e.friendly_name, mode, "MF H264 software");
                 }
+            }
+            if hw_count > 0 && hw_sync == 0 {
+                tracing::warn!(
+                    "Tous les MFT H.264 hardware détectés sont en async-mode. \
+                     L'app utilisera l'encoder software (V3.3.1 ajoutera le \
+                     wrapping async)."
+                );
             }
         }
         Err(e) => {
@@ -235,8 +273,9 @@ mod tests {
         eprintln!("Encodeurs H.264 trouvés:");
         for e in &list {
             eprintln!(
-                "  {:>3}  {}",
+                "  {:>3}  {:>5}  {}",
                 if e.is_hardware { "HW" } else { "SW" },
+                if e.is_async_mode { "async" } else { "sync" },
                 e.friendly_name
             );
         }

@@ -196,26 +196,50 @@ impl MfH264Encoder {
             return Err(Error::other("aucun MFT hardware H.264 disponible"));
         }
 
-        // Prend le premier MFT hardware. SAFETY: activates[0] est un Option<IMFActivate>.
-        let activate = unsafe {
-            (*activates).as_ref().cloned().ok_or_else(|| {
-                let _ = windows::Win32::System::Com::CoTaskMemFree(Some(activates.cast()));
-                Error::other("activate[0] est null")
-            })?
-        };
+        // V3.3 step 2.1 : itère sur tous les HW MFTs et prend le premier en
+        // **sync-mode** (le code async n'est pas wrappé, cf. V3.3.1). Sur les
+        // machines avec NVIDIA récent (async-only) + AMD récent (async-only)
+        // + Microsoft AVC DX12 (sync), on tombera sur DX12.
+        let mut chosen: Option<(IMFActivate, String)> = None;
+        let mut skipped_async: Vec<String> = Vec::new();
+        for i in 0..count as isize {
+            // SAFETY: activates[i] est un Option<IMFActivate>.
+            let candidate = unsafe { (*activates.offset(i)).as_ref().cloned() };
+            let Some(act) = candidate else { continue };
+            let name = read_friendly_name(&act, &MFT_FRIENDLY_NAME_Attribute);
+            // Lit MF_TRANSFORM_ASYNC sur l'IMFActivate AVANT d'activer (cheap).
+            // SAFETY: GetUINT32 retourne Err si attribut absent.
+            let is_async = unsafe { act.GetUINT32(&MF_TRANSFORM_ASYNC).unwrap_or(0) } != 0;
+            if is_async {
+                skipped_async.push(name);
+                continue;
+            }
+            chosen = Some((act, name));
+            break;
+        }
 
-        // Récupère le nom convivial pour le log.
-        let friendly_name = read_friendly_name(&activate, &MFT_FRIENDLY_NAME_Attribute);
-
-        // Libère le tableau alloué par MFTEnumEx (les autres slots sont droppés via Option::take).
-        // SAFETY: activates a été alloué par MFTEnumEx via CoTaskMemAlloc ;
-        // on a déjà cloné le premier IMFActivate (refcount++), on peut donc
-        // libérer le tableau et tous ses slots restants.
+        // Libère le tableau (tous les slots restants).
+        // SAFETY: activates alloué par MFTEnumEx ; on a cloné le retenu.
         unsafe {
             for i in 0..count as isize {
                 let _ = (*activates.offset(i)).take();
             }
             let _ = windows::Win32::System::Com::CoTaskMemFree(Some(activates.cast()));
+        }
+
+        let (activate, friendly_name) = chosen.ok_or_else(|| {
+            Error::other(format!(
+                "Aucun MFT hardware sync-mode. Skipped (async): {}",
+                skipped_async.join(", ")
+            ))
+        })?;
+
+        if !skipped_async.is_empty() {
+            tracing::info!(
+                chosen = %friendly_name,
+                skipped = ?skipped_async,
+                "MFT hardware sync sélectionné (async-only MFTs ignorés, cf. V3.3.1)"
+            );
         }
 
         // Active le MFT.
@@ -225,10 +249,8 @@ impl MfH264Encoder {
                 .map_err(|e| Error::other(format!("ActivateObject({friendly_name}): {e}")))?
         };
 
-        // Détecte le mode async. Les MFT hardware sont souvent async par défaut.
-        // Pour V3.3 step 2, on refuse async (le wrapping async demanderait un
-        // event loop, ~150 lignes de plus). Force sync via MF_TRANSFORM_ASYNC_UNLOCK
-        // si possible, sinon Err.
+        // Double-check : certains MFTs peuvent changer leur mode async après
+        // activation (rare). Si ça arrive, on garde l'erreur explicite.
         let attrs: IMFAttributes = unsafe {
             transform
                 .GetAttributes()
@@ -236,21 +258,8 @@ impl MfH264Encoder {
         };
         let is_async = unsafe { attrs.GetUINT32(&MF_TRANSFORM_ASYNC).unwrap_or(0) } != 0;
         if is_async {
-            // Tente de forcer le mode sync (UNLOCK = 0 ne marche pas, certains
-            // MFTs requièrent UNLOCK=1 pour pouvoir parler avec l'API
-            // synchrone). Si setval échoue, abandonne — caller doit fallback SW.
-            let _ = unsafe {
-                attrs.SetUINT32(
-                    &windows::Win32::Media::MediaFoundation::MF_TRANSFORM_ASYNC_UNLOCK,
-                    1,
-                )
-            };
-            tracing::warn!(
-                name = %friendly_name,
-                "MFT hardware en async-mode — wiring async non implémenté en V3.3 step 2"
-            );
             return Err(Error::other(format!(
-                "MFT hardware {friendly_name} en async-mode, non supporté (fallback SW recommandé)"
+                "MFT {friendly_name} signalé sync à enum mais async après activate"
             )));
         }
 
@@ -763,23 +772,37 @@ mod tests {
     fn new_best_succeeds_on_either_backend() {
         // Honnêteté : ce test n'affirme PAS que le hardware encode produit
         // un bitstream valide. Il vérifie juste que new_best() retourne un
-        // encoder fonctionnel — soit hardware si dispo (puis on logge lequel),
-        // soit fallback software. Sur runner CI sans GPU, on tombe sur SW.
+        // encoder fonctionnel — soit hardware si dispo, soit fallback software.
         let cfg = H264Config {
             width: 320,
             height: 240,
             target_fps: 15,
             bitrate_kbps: 500,
         };
+
+        // Log explicitement le résultat de try_new_hardware en cas d'échec,
+        // pour qu'on sache POURQUOI le fallback SW est utilisé.
+        match MfH264Encoder::try_new_hardware(cfg) {
+            Ok(enc) => match enc.backend() {
+                MfBackend::Hardware { friendly_name } => {
+                    eprintln!("try_new_hardware OK : {friendly_name}");
+                }
+                MfBackend::Software => {
+                    eprintln!("try_new_hardware returned Software (bug)");
+                }
+            },
+            Err(e) => {
+                eprintln!("try_new_hardware échec : {e}");
+            }
+        }
+
         let enc = MfH264Encoder::new_best(cfg).expect("au moins SW doit marcher");
         match enc.backend() {
             MfBackend::Software => {
-                eprintln!("backend = Software (Microsoft CLSID_CMSH264EncoderMFT)");
+                eprintln!("new_best() → Software fallback");
             }
             MfBackend::Hardware { friendly_name } => {
-                eprintln!("backend = Hardware ({friendly_name})");
-                // Sur la machine de dev avec NVIDIA, ce path s'exécute. Pas
-                // de vérification de la qualité du bitstream encore.
+                eprintln!("new_best() → Hardware ({friendly_name})");
             }
         }
     }
