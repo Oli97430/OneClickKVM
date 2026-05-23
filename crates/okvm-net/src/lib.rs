@@ -52,9 +52,11 @@ pub mod connector;
 pub mod handshake;
 pub mod listener;
 pub mod session;
+pub mod udp_audio;
 
 pub use codec::{FrameCodec, MAX_LENGTH_PREFIX};
 pub use connector::{Connector, ConnectorConfig};
 pub use handshake::{drive_client, drive_server, HandshakeOutcome};
 pub use listener::{Listener, ListenerConfig};
 pub use session::{Session, SessionHandle};
+pub use udp_audio::{spawn_pipe as spawn_udp_audio_pipe, UdpAudioError, UdpAudioPipe};

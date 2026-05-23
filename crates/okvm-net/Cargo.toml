@@ -9,6 +9,7 @@ description = "Transport TCP chiffre, multiplexage de canaux, heartbeat, IPv4/IP
 okvm-core.workspace = true
 okvm-crypto.workspace = true
 okvm-protocol.workspace = true
+okvm-udp = { path = "../okvm-udp" }
 
 tokio.workspace = true
 tokio-util.workspace = true
@@ -29,6 +30,7 @@ windows.workspace = true
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
 tracing-subscriber.workspace = true
+uuid.workspace = true
 
 [lints]
 workspace = true

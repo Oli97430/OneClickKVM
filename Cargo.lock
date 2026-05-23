@@ -1420,6 +1420,7 @@ dependencies = [
  "okvm-core",
  "okvm-crypto",
  "okvm-protocol",
+ "okvm-udp",
  "parking_lot 0.12.5",
  "rand_core 0.6.4",
  "serde",
@@ -1429,6 +1430,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-subscriber",
+ "uuid",
  "windows 0.58.0",
 ]
 
