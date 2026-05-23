@@ -180,12 +180,10 @@ impl Session {
         heartbeat_timeout: Duration,
     ) -> Result<Self, crate::udp_audio::UdpAudioError> {
         // Récupère les clés UDP avant de move outcome dans start().
-        let udp_keys = outcome.udp_keys.clone().ok_or_else(|| {
-            crate::udp_audio::UdpAudioError::Fec(okvm_udp::FecError::BadParams {
-                data: 0,
-                parity: 0,
-            })
-        })?;
+        let udp_keys = outcome
+            .udp_keys
+            .clone()
+            .ok_or(crate::udp_audio::UdpAudioError::MissingUdpKeys)?;
 
         let mut session = Self::start(stream, outcome, heartbeat_interval, heartbeat_timeout);
 
@@ -430,6 +428,13 @@ impl Session {
                 let mut codec = FrameCodec::new();
                 let mut buf = BytesMut::with_capacity(64 * 1024);
                 let mut read_half = read_half;
+                // REVIEW fix #2 : si on est en mode UDP audio,
+                // `app_audio_recv_tx` est devenu orphelin (start_with_udp a
+                // remplacé le receiver côté app). Toutes les frames audio
+                // TCP arrivent ici sans destination — c'est un signe que le
+                // peer est en V3.0 (pre-UDP). On log UNE FOIS pour ne pas
+                // spammer.
+                let mut audio_tcp_skew_warned = false;
                 loop {
                     // Lecture incrementale.
                     let mut tmp = [0u8; 16 * 1024];
@@ -499,7 +504,16 @@ impl Session {
                                                 bincode_cfg(),
                                             )
                                         {
-                                            let _ = app_audio_recv_tx.send(m).await;
+                                            if app_audio_recv_tx.send(m).await.is_err()
+                                                && !audio_tcp_skew_warned
+                                            {
+                                                audio_tcp_skew_warned = true;
+                                                tracing::warn!(
+                                                    "Audio reçu sur TCP mais le canal local est UDP \
+                                                     (start_with_udp actif). Pair en V3.0 ? \
+                                                     Frame droppée (warning unique par session)."
+                                                );
+                                            }
                                         }
                                     }
                                     Channel::Video => {

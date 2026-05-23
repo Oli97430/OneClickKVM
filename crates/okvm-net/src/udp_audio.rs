@@ -50,9 +50,9 @@ pub const AUDIO_FEC_K: usize = 1;
 /// Shards de parité par défaut.
 pub const AUDIO_FEC_M: usize = 1;
 
-/// Délai max d'attente du pin de l'addr distante côté serveur avant de
-/// commencer à drop les frames sortantes (en réalité « never sent » jusqu'à
-/// ce qu'un inbound arrive).
+/// (Non utilisé depuis REVIEW fix #1 — le sender ne bloque plus, il
+/// re-check le pin à chaque frame.) Gardé pour compat docs.
+#[allow(dead_code)]
 const PIN_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Erreurs au démarrage du pipe.
@@ -61,6 +61,11 @@ pub enum UdpAudioError {
     /// Paramètres FEC invalides.
     #[error("fec: {0}")]
     Fec(#[from] okvm_udp::FecError),
+    /// `HandshakeOutcome.udp_keys` est `None` alors qu'on tente de wirer UDP.
+    /// Le handshake n'a pas négocié de canal UDP (`udp_ports` était vide
+    /// côté serveur, donc pas de KDF UDP côté client).
+    #[error("UDP audio requested but handshake did not derive UDP keys")]
+    MissingUdpKeys,
 }
 
 /// Handle de pilotage d'un [`UdpAudioPipe`].
@@ -114,30 +119,11 @@ pub fn spawn_pipe(
     let remote_send = remote_addr.clone();
     let pin_notify_send = pin_notify.clone();
     let sender_task = tokio::spawn(async move {
-        // Attend que l'addr soit pinned (immédiat côté client, après 1er
-        // inbound côté serveur). On relâche TOUJOURS le lock avant d'awaiter
-        // (sinon le Future contient un MutexGuard non-Send → tokio refuse).
-        let initial_remote = {
-            let snapshot = *remote_send.lock();
-            match snapshot {
-                Some(a) => Some(a),
-                None => {
-                    tracing::debug!("UDP audio sender attend le pin de l'addr distante");
-                    let pinned =
-                        tokio::time::timeout(PIN_TIMEOUT, pin_notify_send.notified()).await;
-                    if pinned.is_err() {
-                        tracing::warn!("UDP audio sender : pin timeout, frames seront drop");
-                    }
-                    *remote_send.lock()
-                }
-            }
-        };
-        let Some(initial_remote) = initial_remote else {
-            // Pas d'addr ; on consomme + drop pour ne pas backpresser l'app.
-            while app_audio_send_rx.recv().await.is_some() {}
-            return;
-        };
-
+        // V3.1 step 7 + REVIEW fix #1 : on init FEC + AEAD une fois, mais on
+        // diffère la création du `UdpFecSender` jusqu'à ce que `remote_send`
+        // soit pinned. On re-check à chaque frame reçue → si le pin se fait
+        // EN COURS de session (NAT punching tardif), le sender se "réveille"
+        // automatiquement plutôt que de rester dans drain-and-drop permanent.
         let fec = match FecCodec::new(AUDIO_FEC_K, AUDIO_FEC_M) {
             Ok(f) => f,
             Err(e) => {
@@ -145,13 +131,60 @@ pub fn spawn_pipe(
                 return;
             }
         };
-        let aead = AeadSession::new(&send_key, 1);
-        let mut sender = UdpFecSender::new(socket_send, initial_remote, aead, fec);
+        let mut sender: Option<UdpFecSender> = None;
+        let mut frames_dropped_no_pin: u64 = 0;
+
+        // Si l'addr est déjà connue (cas client), on instancie immédiatement
+        // — pas besoin d'attendre une frame inbound.
+        if let Some(addr) = *remote_send.lock() {
+            sender = Some(UdpFecSender::new(
+                socket_send.clone(),
+                addr,
+                AeadSession::new(&send_key, 1),
+                fec,
+            ));
+        } else {
+            // Cas serveur : on N'instancie PAS encore. Mais on log qu'on
+            // attend. Le 1er frame applicatif déclenchera une nouvelle
+            // tentative.
+            tracing::debug!("UDP audio sender : attend que le receiver pin l'addr");
+        }
 
         while let Some(msg) = app_audio_send_rx.recv().await {
-            // Rafraîchit l'addr (peut avoir changé si le client a roamé).
-            // Note : V3.1 step 4 ne supporte pas le roaming ; on garde
-            // l'addr initiale. Step 5 pourrait recréer le sender.
+            // Si on n'a pas encore de sender, tente de l'instancier (pin
+            // peut avoir eu lieu entre 2 frames).
+            if sender.is_none() {
+                if let Some(addr) = *remote_send.lock() {
+                    tracing::info!(?addr, "UDP audio sender activé (pin tardif détecté)");
+                    // FecCodec et AeadSession non clonable → on les recrée
+                    // à ce stade. Pour l'aead c'est OK car le seq counter
+                    // de l'epoch 1 démarre à 0 dans tous les cas.
+                    let fec_new = match FecCodec::new(AUDIO_FEC_K, AUDIO_FEC_M) {
+                        Ok(f) => f,
+                        Err(_) => continue,
+                    };
+                    sender = Some(UdpFecSender::new(
+                        socket_send.clone(),
+                        addr,
+                        AeadSession::new(&send_key, 1),
+                        fec_new,
+                    ));
+                } else {
+                    // Toujours pas pinned → drop cette frame (compte pour
+                    // visibilité). On évite d'attendre le pin_notify ici
+                    // pour ne pas bloquer si l'app produit des frames audio
+                    // en continu (cas réaliste).
+                    frames_dropped_no_pin = frames_dropped_no_pin.saturating_add(1);
+                    if frames_dropped_no_pin.is_power_of_two() {
+                        tracing::debug!(
+                            count = frames_dropped_no_pin,
+                            "UDP audio frame droppée (remote addr pas encore pinned)"
+                        );
+                    }
+                    continue;
+                }
+            }
+            let Some(s) = sender.as_mut() else { continue };
             let bytes = match bincode::serde::encode_to_vec(&msg, bincode::config::standard()) {
                 Ok(b) => b,
                 Err(e) => {
@@ -159,10 +192,13 @@ pub fn spawn_pipe(
                     continue;
                 }
             };
-            if let Err(e) = sender.send_frame(&bytes).await {
+            if let Err(e) = s.send_frame(&bytes).await {
                 tracing::debug!(error = ?e, "UDP audio send échec (frame droppée)");
             }
         }
+        // pin_notify est désormais redundant — le ré-essai est fait à chaque
+        // frame. Garde la variable pour ne pas changer l'API publique.
+        let _ = pin_notify_send;
         tracing::debug!("UDP audio sender : app_audio_send_rx fermé, arrêt");
     });
 
@@ -295,6 +331,85 @@ mod tests {
             .expect("timeout — UDP audio pipe doit livrer en <2s")
             .expect("server_recv_rx fermé");
         assert_eq!(received, msg);
+    }
+
+    #[tokio::test]
+    async fn audio_pipe_recovers_when_pin_happens_after_first_app_send() {
+        // REVIEW fix #1 regression test : avant la correction, le sender
+        // tombait dans drain-and-drop permanent si le pin arrivait après
+        // le timeout 5s. Ce test démontre que :
+        // 1. Serveur démarre sans remote_addr
+        // 2. App pousse 2 frames AVANT le pin (elles sont droppées en silence)
+        // 3. Client envoie 1 frame → pin
+        // 4. App pousse 1 nouvelle frame → CETTE FOIS elle part bien
+        use okvm_protocol::AudioMessage;
+        use uuid::Uuid;
+
+        let server_sock = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
+        let client_sock = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
+        let server_addr = server_sock.local_addr().unwrap();
+        let key = make_key();
+
+        // Serveur : pas d'addr.
+        let (server_send_tx, server_send_rx) = mpsc::channel::<AudioMessage>(8);
+        let (server_recv_tx, mut server_recv_rx) = mpsc::channel::<AudioMessage>(8);
+        let server_pipe = spawn_pipe(
+            server_sock,
+            key.clone(),
+            key.clone(),
+            None,
+            server_send_rx,
+            server_recv_tx,
+        )
+        .unwrap();
+
+        // Étape 2 : pousser 2 frames côté server AVANT le pin.
+        // Avec la correction, ces frames sont droppées silencieusement
+        // (sans bloquer le sender).
+        let early = AudioMessage::StreamStop {
+            stream_id: Uuid::from_u128(99),
+        };
+        server_send_tx.send(early.clone()).await.unwrap();
+        server_send_tx.send(early.clone()).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        // Vérifie qu'il n'y a toujours pas de pin.
+        assert!(server_pipe.remote_addr.lock().is_none());
+
+        // Client : connaît serveur, envoie une frame.
+        let (client_send_tx, client_send_rx) = mpsc::channel::<AudioMessage>(8);
+        let (client_recv_tx, mut client_recv_rx) = mpsc::channel::<AudioMessage>(8);
+        let _client_pipe = spawn_pipe(
+            client_sock,
+            key.clone(),
+            key,
+            Some(server_addr),
+            client_send_rx,
+            client_recv_tx,
+        )
+        .unwrap();
+
+        let m1 = AudioMessage::StreamStop {
+            stream_id: Uuid::from_u128(1),
+        };
+        client_send_tx.send(m1.clone()).await.unwrap();
+        let _ = tokio::time::timeout(Duration::from_secs(2), server_recv_rx.recv())
+            .await
+            .expect("client→server doit aboutir")
+            .expect("server recv closed");
+
+        // Le pin a eu lieu (vérifié par la réception).
+        assert!(server_pipe.remote_addr.lock().is_some());
+
+        // Étape 4 : nouvelle frame côté server APRÈS pin → doit partir.
+        let m_late = AudioMessage::StreamStop {
+            stream_id: Uuid::from_u128(77),
+        };
+        server_send_tx.send(m_late.clone()).await.unwrap();
+        let r = tokio::time::timeout(Duration::from_secs(2), client_recv_rx.recv())
+            .await
+            .expect("server→client APRÈS pin tardif doit aboutir (régression fix #1)")
+            .expect("client recv closed");
+        assert_eq!(r, m_late);
     }
 
     #[tokio::test]
