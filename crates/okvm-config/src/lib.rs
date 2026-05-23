@@ -147,11 +147,22 @@ pub struct PeerProfile {
 /// la même machine sans qu'elles écrasent mutuellement leurs configs
 /// `config.json`, `peers.json`, `identity.dpapi`.
 ///
-/// Le nom d'instance est **sanitisé** : seul `[a-zA-Z0-9_-]` est conservé,
-/// max 32 caractères. Évite de créer des paths invalides Windows si
-/// l'utilisateur passe un mauvais nom.
+/// Le nom d'instance est **sanitisé** :
+/// - Seul `[a-zA-Z0-9_-]` est conservé, max 32 caractères.
+/// - Les **noms réservés Windows** (`CON`, `PRN`, `AUX`, `NUL`, `COM1-9`,
+///   `LPT1-9`, casse-insensible) sont rejetés et retombent sur le défaut.
+///
+/// Évite de créer des paths invalides Windows (path traversal, devices DOS)
+/// si l'utilisateur passe un mauvais nom.
 ///
 /// Exemple : `$env:OKVM_INSTANCE = "alice"` → `%APPDATA%\OneClickKVM-alice\`.
+///
+/// **Note d'implémentation** : la variable d'env est lue à **chaque appel**
+/// (pas de cache statique). Conséquence : si vous changez `OKVM_INSTANCE`
+/// pendant que le process tourne, le prochain appel à `config_dir()` voit
+/// le nouveau nom — mais les caches mémoire (config, peers, identité déjà
+/// chargés) restent sur l'ancien. **Best practice** : définir
+/// `OKVM_INSTANCE` *avant* de lancer le process, pas après.
 ///
 /// # Erreur
 /// Renvoie [`okvm_core::Error::Config`] si on ne peut pas déterminer le
@@ -172,11 +183,36 @@ pub fn config_dir() -> Result<PathBuf> {
 
 /// Garde uniquement `[a-zA-Z0-9_-]`, plafonné à 32 caractères. Tout ce qui
 /// est rejeté est silencieusement supprimé.
+///
+/// Refuse en plus les **noms réservés Windows** (CON, PRN, AUX, NUL,
+/// COM1-9, LPT1-9, casse-insensible) en renvoyant `""`. Le caller doit
+/// retomber sur le nom par défaut quand le résultat est vide.
 fn sanitize_instance_name(raw: &str) -> String {
-    raw.chars()
+    let filtered: String = raw
+        .chars()
         .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
         .take(32)
-        .collect()
+        .collect();
+    if is_windows_reserved_name(&filtered) {
+        return String::new();
+    }
+    filtered
+}
+
+/// Vérifie si `name` est un nom de device DOS réservé par Windows
+/// (casse-insensible). Ces noms ne peuvent pas servir de nom de
+/// fichier/dossier sur Windows, **même** avec extension.
+///
+/// Liste tirée de [Microsoft Win32 file naming conventions][docs].
+///
+/// [docs]: https://learn.microsoft.com/windows/win32/fileio/naming-a-file
+fn is_windows_reserved_name(name: &str) -> bool {
+    let upper = name.to_ascii_uppercase();
+    matches!(upper.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || (upper.len() == 4
+            && (upper.starts_with("COM") || upper.starts_with("LPT"))
+            && upper.as_bytes()[3].is_ascii_digit()
+            && upper.as_bytes()[3] != b'0')
 }
 
 /// Charge `AppConfig` depuis disque, ou la valeur par défaut si absent.
@@ -384,6 +420,38 @@ mod tests {
         // Plafonné à 32 chars.
         let long = "x".repeat(100);
         assert_eq!(sanitize_instance_name(&long).len(), 32);
+    }
+
+    #[test]
+    fn sanitize_instance_name_rejects_windows_reserved() {
+        // Noms réservés DOS — casse-insensible — retournent "".
+        assert_eq!(sanitize_instance_name("CON"), "");
+        assert_eq!(sanitize_instance_name("con"), "");
+        assert_eq!(sanitize_instance_name("PRN"), "");
+        assert_eq!(sanitize_instance_name("AUX"), "");
+        assert_eq!(sanitize_instance_name("NUL"), "");
+        assert_eq!(sanitize_instance_name("COM1"), "");
+        assert_eq!(sanitize_instance_name("com9"), "");
+        assert_eq!(sanitize_instance_name("LPT1"), "");
+        assert_eq!(sanitize_instance_name("lpt9"), "");
+        // Variantes proches mais légales (différents de la liste exacte).
+        assert_eq!(sanitize_instance_name("COM0"), "COM0"); // 0 pas dans 1..9
+        assert_eq!(sanitize_instance_name("COM10"), "COM10"); // 5 chars
+        assert_eq!(sanitize_instance_name("CONS"), "CONS"); // pas CON exact
+        assert_eq!(sanitize_instance_name("ACON"), "ACON"); // pas CON exact
+    }
+
+    #[test]
+    fn is_windows_reserved_name_known_list() {
+        assert!(is_windows_reserved_name("CON"));
+        assert!(is_windows_reserved_name("con"));
+        assert!(is_windows_reserved_name("COM1"));
+        assert!(is_windows_reserved_name("lpt5"));
+        assert!(!is_windows_reserved_name("alice"));
+        assert!(!is_windows_reserved_name(""));
+        assert!(!is_windows_reserved_name("COM"));
+        assert!(!is_windows_reserved_name("COM0"));
+        assert!(!is_windows_reserved_name("COMA"));
     }
 
     #[test]

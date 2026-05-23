@@ -320,14 +320,28 @@ impl MfH264Encoder {
     ///
     /// Implémentation : on tente `try_new_hardware` (qui exerce vraiment
     /// MFTEnumEx + Activate). Si succès → `Hardware`. Sinon → `Software`.
-    /// Note : le coût est l'init D3D11 (~10 ms) puis activate du MFT —
-    /// non gratuit, mais OK pour un appel one-shot au load de AboutView.
+    /// Coût brut (init D3D11 + activate MFT) : ~10-50 ms.
+    ///
+    /// **Cache process-wide** : le résultat est mémorisé dans un
+    /// `OnceLock` au premier appel. Les appels suivants sont O(1) — pas
+    /// de re-probe à chaque ouverture de AboutView. Justification : le
+    /// hardware installé ne change pas pendant la vie du process (pas de
+    /// hot-plug GPU sous Windows desktop pour ce genre de MFT), et
+    /// `cfg` n'influence pas la dispo hardware (les MFTs modernes
+    /// supportent H.264 Main aux résolutions courantes).
+    ///
+    /// Si vous avez besoin de forcer un re-probe (par ex. test
+    /// d'intégration qui mock le driver), instanciez plutôt
+    /// [`Self::try_new_hardware`] directement.
     #[must_use]
     pub fn probe_best_backend(cfg: H264Config) -> MfBackend {
-        match Self::try_new_hardware(cfg) {
-            Ok(enc) => enc.backend.clone(),
-            Err(_) => MfBackend::Software,
-        }
+        static CACHE: std::sync::OnceLock<MfBackend> = std::sync::OnceLock::new();
+        CACHE
+            .get_or_init(|| match Self::try_new_hardware(cfg) {
+                Ok(enc) => enc.backend.clone(),
+                Err(_) => MfBackend::Software,
+            })
+            .clone()
     }
 
     /// Tente d'instancier le **meilleur** encodeur disponible :
