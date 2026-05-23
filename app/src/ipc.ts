@@ -135,6 +135,7 @@ export async function listLocalScreens(): Promise<ScreenView[]> {
 export interface H264EncoderView {
   friendly_name: string;
   is_hardware: boolean;
+  is_async_mode: boolean;
 }
 
 export interface AboutInfo {
@@ -148,6 +149,8 @@ export interface AboutInfo {
   tcp_port: number;
   h264_encoders: H264EncoderView[];
   has_hardware_h264: boolean;
+  /** Backend MFT choisi par new_best() — ex: "software (Microsoft …)" */
+  mft_backend_active: string;
 }
 
 export async function getAppConfig(): Promise<AppConfig> {

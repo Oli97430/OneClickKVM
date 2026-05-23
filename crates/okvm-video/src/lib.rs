@@ -99,4 +99,4 @@ pub use mediafoundation::{
 };
 
 #[cfg(windows)]
-pub use mediafoundation_encoder::{rgb_to_nv12, MfH264Encoder};
+pub use mediafoundation_encoder::{rgb_to_nv12, MfBackend, MfH264Encoder};

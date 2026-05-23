@@ -209,7 +209,10 @@ fn run_capture_thread(
     let codec = if prefer_h264 {
         let validation = match h264_backend {
             H264Backend::Openh264 => H264Encoder::new(h264_cfg).map(|_| ()),
-            H264Backend::MediaFoundation => MfH264Encoder::new(h264_cfg).map(|_| ()),
+            // V3.3 : new_best() essaye HW (sync-mode) puis fallback CLSID SW.
+            // Sur les machines avec MFT HW async-only (NVIDIA / AMD récents),
+            // ça retombera systématiquement sur SW jusqu'à V3.3.1.
+            H264Backend::MediaFoundation => MfH264Encoder::new_best(h264_cfg).map(|_| ()),
         };
         match validation {
             Ok(()) => {
@@ -343,7 +346,10 @@ impl GraphicsCaptureApiHandler for FrameEncoderHandler {
                 H264Backend::Openh264 => H264Encoder::new(h264_cfg)
                     .ok()
                     .map(AnyH264Encoder::Openh264),
-                H264Backend::MediaFoundation => MfH264Encoder::new(h264_cfg)
+                H264Backend::MediaFoundation => MfH264Encoder::new_best(h264_cfg)
+                    .inspect(|enc| {
+                        tracing::info!(backend = ?enc.backend(), "MFT encoder actif");
+                    })
                     .ok()
                     .map(AnyH264Encoder::MediaFoundation),
             }

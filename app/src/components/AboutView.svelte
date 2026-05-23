@@ -72,13 +72,9 @@
       <dt>Licence</dt>
       <dd>{info.license}</dd>
 
-      <dt>Encodage H.264</dt>
+      <dt>Encodage H.264 (actif)</dt>
       <dd>
-        {#if info.has_hardware_h264}
-          <span class="badge-ok">⚡ Hardware disponible</span>
-        {:else}
-          <span class="badge-warn">Software seulement (CPU)</span>
-        {/if}
+        <span class="mono">{info.mft_backend_active}</span>
         {#if info.h264_encoders.length > 0}
           <details class="encoders">
             <summary>{info.h264_encoders.length} encodeur(s) détecté(s)</summary>
@@ -88,10 +84,19 @@
                   <span class="enc-tag" class:hw={enc.is_hardware}>
                     {enc.is_hardware ? "HW" : "SW"}
                   </span>
+                  <span class="enc-mode" class:async={enc.is_async_mode}>
+                    {enc.is_async_mode ? "async" : "sync"}
+                  </span>
                   {enc.friendly_name}
                 </li>
               {/each}
             </ul>
+            <p class="hint">
+              Les MFT hardware en mode <em>async</em> ne sont pas
+              utilisables tant que V3.3.1 n'est pas livré (wrapping event
+              loop). Sur ce PC, c'est probablement la cause si l'encodeur
+              actif est software malgré la présence d'un GPU compatible.
+            </p>
           </details>
         {/if}
       </dd>
@@ -298,24 +303,6 @@
     font-weight: 700;
   }
 
-  .badge-ok {
-    background: rgba(34, 197, 94, 0.18);
-    color: #86efac;
-    padding: 0.15rem 0.5rem;
-    border-radius: 4px;
-    font-size: 0.78rem;
-    font-weight: 600;
-  }
-
-  .badge-warn {
-    background: rgba(245, 158, 11, 0.18);
-    color: #fcd34d;
-    padding: 0.15rem 0.5rem;
-    border-radius: 4px;
-    font-size: 0.78rem;
-    font-weight: 600;
-  }
-
   .encoders {
     margin-top: 0.45rem;
     font-size: 0.8rem;
@@ -352,5 +339,34 @@
   .enc-tag.hw {
     background: rgba(34, 197, 94, 0.18);
     color: #86efac;
+  }
+
+  .enc-mode {
+    display: inline-block;
+    padding: 0 0.35rem;
+    border-radius: 3px;
+    font-family: "Cascadia Code", "Consolas", monospace;
+    font-size: 0.66rem;
+    background: var(--surface-2);
+    color: var(--fg-muted);
+    margin-right: 0.45rem;
+  }
+
+  .enc-mode.async {
+    background: rgba(245, 158, 11, 0.18);
+    color: #fcd34d;
+  }
+
+  .encoders .hint {
+    margin: 0.5rem 0 0;
+    font-size: 0.75rem;
+    color: var(--fg-muted);
+    font-style: italic;
+    line-height: 1.4;
+  }
+
+  .encoders .hint em {
+    font-weight: 600;
+    color: var(--fg);
   }
 </style>

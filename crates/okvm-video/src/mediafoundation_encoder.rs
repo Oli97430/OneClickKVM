@@ -313,6 +313,23 @@ impl MfH264Encoder {
         })
     }
 
+    /// Diagnostic léger : retourne quel backend MFT serait choisi par
+    /// [`Self::new_best`] sur cette machine, sans garder l'encoder vivant.
+    /// Utile pour l'UI (AboutView) qui veut afficher l'état sans démarrer
+    /// la capture.
+    ///
+    /// Implémentation : on tente `try_new_hardware` (qui exerce vraiment
+    /// MFTEnumEx + Activate). Si succès → `Hardware`. Sinon → `Software`.
+    /// Note : le coût est l'init D3D11 (~10 ms) puis activate du MFT —
+    /// non gratuit, mais OK pour un appel one-shot au load de AboutView.
+    #[must_use]
+    pub fn probe_best_backend(cfg: H264Config) -> MfBackend {
+        match Self::try_new_hardware(cfg) {
+            Ok(enc) => enc.backend.clone(),
+            Err(_) => MfBackend::Software,
+        }
+    }
+
     /// Tente d'instancier le **meilleur** encodeur disponible :
     /// 1. [`Self::try_new_hardware`] (NVENC/QSV/AMF si OS support)
     /// 2. [`Self::new`] (MFT Microsoft software) en fallback

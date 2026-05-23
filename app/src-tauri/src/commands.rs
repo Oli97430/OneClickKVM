@@ -416,9 +416,21 @@ pub async fn get_about_info(state: State<'_, AppState>) -> Result<AboutInfo, Str
         .map(|e| H264EncoderView {
             friendly_name: e.friendly_name,
             is_hardware: e.is_hardware,
+            is_async_mode: e.is_async_mode,
         })
         .collect();
     let has_hw = h264_encoders.iter().any(|e| e.is_hardware);
+    // Probe MFT backend qui serait effectivement choisi (cf. V3.3 doc).
+    let mft_active = okvm_video::MfH264Encoder::probe_best_backend(okvm_video::H264Config {
+        width: 320,
+        height: 240,
+        target_fps: 15,
+        bitrate_kbps: 500,
+    });
+    let mft_active_str = match mft_active {
+        okvm_video::MfBackend::Software => "software (Microsoft CLSID_CMSH264EncoderMFT)".into(),
+        okvm_video::MfBackend::Hardware { friendly_name } => format!("hardware ({friendly_name})"),
+    };
     Ok(AboutInfo {
         app_name: "OneClick KVM".into(),
         version: env!("CARGO_PKG_VERSION").into(),
@@ -430,6 +442,7 @@ pub async fn get_about_info(state: State<'_, AppState>) -> Result<AboutInfo, Str
         tcp_port: state.tcp_port,
         h264_encoders,
         has_hardware_h264: has_hw,
+        mft_backend_active: mft_active_str,
     })
 }
 
@@ -445,12 +458,17 @@ pub struct AboutInfo {
     pub tcp_port: u16,
     pub h264_encoders: Vec<H264EncoderView>,
     pub has_hardware_h264: bool,
+    /// Description lisible du backend MFT qui serait choisi par new_best
+    /// (cf. V3.3). Ex: "software (Microsoft CLSID_CMSH264EncoderMFT)" ou
+    /// "hardware (Intel Quick Sync Video H.264 Encoder MFT)".
+    pub mft_backend_active: String,
 }
 
 #[derive(serde::Serialize)]
 pub struct H264EncoderView {
     pub friendly_name: String,
     pub is_hardware: bool,
+    pub is_async_mode: bool,
 }
 
 /// Active le mode d'appairage : génère un PIN à 6 chiffres valide
