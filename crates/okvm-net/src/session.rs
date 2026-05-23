@@ -153,6 +153,75 @@ impl Session {
         }
     }
 
+    /// Démarre une session avec audio routé sur UDP + FEC + AEAD epoch 1.
+    ///
+    /// Variante de [`Self::start`] qui :
+    ///
+    /// 1. Construit la session TCP-only normalement via `start()`.
+    /// 2. Remplace les channels `audio_tx`/`audio_rx` exposés par 2 nouveaux
+    ///    channels qui bridgent vers un [`crate::UdpAudioPipe`] : tout ce
+    ///    que l'app envoie via `audio_tx` part en UDP+FEC, tout ce qui arrive
+    ///    par UDP est poussé dans `audio_rx`.
+    /// 3. Les anciens channels TCP audio sont droppés côté `Sender` —
+    ///    `encoder_audio` voit le canal fermé et exit proprement.
+    ///
+    /// Le canal TCP audio reste « techniquement actif » côté reader (le pair
+    /// d'en face *pourrait* envoyer sur Channel::Audio TCP) mais ne sera jamais
+    /// déclenché tant que les 2 côtés utilisent cette méthode.
+    ///
+    /// # Erreurs
+    /// [`crate::UdpAudioError`] si l'init du FEC codec échoue.
+    pub fn start_with_udp(
+        stream: tokio::net::TcpStream,
+        outcome: HandshakeOutcome,
+        udp_socket: std::sync::Arc<tokio::net::UdpSocket>,
+        remote_udp_addr: Option<std::net::SocketAddr>,
+        heartbeat_interval: Duration,
+        heartbeat_timeout: Duration,
+    ) -> Result<Self, crate::udp_audio::UdpAudioError> {
+        // Récupère les clés UDP avant de move outcome dans start().
+        let udp_keys = outcome.udp_keys.clone().ok_or_else(|| {
+            crate::udp_audio::UdpAudioError::Fec(okvm_udp::FecError::BadParams {
+                data: 0,
+                parity: 0,
+            })
+        })?;
+
+        let mut session = Self::start(stream, outcome, heartbeat_interval, heartbeat_timeout);
+
+        // Crée les nouveaux channels qui remplacent ceux exposés.
+        let (new_send_tx, new_send_rx) = mpsc::channel::<AudioMessage>(APP_CHANNEL_CAPACITY);
+        let (new_recv_tx, new_recv_rx) = mpsc::channel::<AudioMessage>(APP_CHANNEL_CAPACITY);
+
+        // Substitue. L'ancien `audio_tx` est droppé → encoder_audio TCP voit
+        // le canal fermé sur son recv() suivant → exit propre. L'ancien
+        // `audio_rx` est droppé → si le pair envoie sur TCP Channel::Audio,
+        // le reader fera `let _ = tx.send().await` qui sera Err et ignoré.
+        let _ = std::mem::replace(&mut session.audio_tx, new_send_tx);
+        let _ = std::mem::replace(&mut session.audio_rx, new_recv_rx);
+
+        // Spawn le pipe UDP — sender consume new_send_rx, receiver pousse
+        // sur new_recv_tx.
+        let pipe = crate::udp_audio::spawn_pipe(
+            udp_socket,
+            udp_keys.0,
+            udp_keys.1,
+            remote_udp_addr,
+            new_send_rx,
+            new_recv_tx,
+        )?;
+
+        // Intègre les UDP tasks dans le handle pour shutdown coordonné.
+        session.handle.tasks.push(pipe.sender_task);
+        session.handle.tasks.push(pipe.receiver_task);
+
+        tracing::info!(
+            remote_udp = ?remote_udp_addr,
+            "Session démarrée avec audio UDP+FEC"
+        );
+        Ok(session)
+    }
+
     /// Demarre une session a partir d'un `HandshakeOutcome` et d'une `TcpStream`.
     ///
     /// `heartbeat_interval` est la cadence d'envoi de `CtrlMessage::Heartbeat`.

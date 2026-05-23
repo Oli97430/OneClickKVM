@@ -165,27 +165,44 @@ impl Listener {
                         return;
                     }
                 };
-                // Logge si le handshake a effectivement publié le port UDP.
-                if let Some(udp_port) = outcome
+                // V3.1 step 5+6 : si le handshake a négocié un canal UDP audio
+                // ET qu'on a réussi à binder un socket, lance la session
+                // avec routage audio sur UDP+FEC. Sinon fallback Session::start
+                // (audio sur TCP comme avant).
+                let has_udp_audio = outcome
                     .udp_ports
                     .iter()
-                    .find(|(ch, _)| *ch == UDP_CHANNEL_AUDIO)
-                    .map(|(_, p)| *p)
-                {
-                    tracing::debug!(peer = %peer_addr, udp_port, "session avec UDP audio");
-                } else if udp_socket.is_some() {
-                    tracing::debug!(peer = %peer_addr, "UDP socket bindée mais pas advertise");
-                }
-                // V3.1 step 3 wiring : passer `udp_socket` + `outcome.udp_keys`
-                // à Session::start_with_udp() pour brancher le canal audio.
-                // Pour l'instant on garde la session TCP-only et on drop le socket.
-                drop(udp_socket);
-                let session = Session::start(
-                    stream,
-                    outcome,
-                    cfg.heartbeat_interval,
-                    cfg.heartbeat_timeout,
-                );
+                    .any(|(ch, _)| *ch == UDP_CHANNEL_AUDIO);
+                let session = match (udp_socket, has_udp_audio) {
+                    (Some(sock), true) => {
+                        // Côté serveur : on ne connaît PAS encore l'addr UDP du
+                        // client (NAT pinning auto via 1ère réception UDP).
+                        tracing::info!(peer = %peer_addr, "session avec audio UDP+FEC");
+                        match Session::start_with_udp(
+                            stream,
+                            outcome,
+                            std::sync::Arc::new(sock),
+                            None, // pin sur 1er inbound
+                            cfg.heartbeat_interval,
+                            cfg.heartbeat_timeout,
+                        ) {
+                            Ok(s) => s,
+                            Err(e) => {
+                                tracing::warn!(
+                                    error = ?e,
+                                    "start_with_udp echec — connexion abandonnée"
+                                );
+                                return;
+                            }
+                        }
+                    }
+                    _ => Session::start(
+                        stream,
+                        outcome,
+                        cfg.heartbeat_interval,
+                        cfg.heartbeat_timeout,
+                    ),
+                };
                 if tx2.send(session).await.is_err() {
                     tracing::debug!("receiver de sessions ferme — abandon");
                 }

@@ -106,17 +106,15 @@ impl Connector {
         )
         .await?;
 
-        // V3.1 step 2 : si le serveur a annoncé un port UDP audio, on bind
-        // un UDP socket local et on calcule l'addr distante pour future
-        // émission. Best-effort : si bind échoue, audio retombera sur TCP.
-        // (Le step 3 brancherait ce socket sur la Session ; pour l'instant
-        // on logge juste l'établissement réussi.)
-        if let Some((_chan, server_udp_port)) = outcome
+        // V3.1 step 5+6 : si le serveur a annoncé un port UDP audio, on bind
+        // un UDP socket local et on appelle start_with_udp(). Sinon fallback
+        // sur Session::start() (audio TCP comme avant).
+        let server_udp = outcome
             .udp_ports
             .iter()
             .find(|(ch, _)| *ch == UDP_CHANNEL_AUDIO)
-            .copied()
-        {
+            .copied();
+        let session = if let Some((_chan, server_udp_port)) = server_udp {
             let server_udp_addr = SocketAddr::new(self.cfg.remote.ip(), server_udp_port);
             let bind_local_ip = match self.cfg.remote {
                 SocketAddr::V4(_) => "0.0.0.0".parse().unwrap(),
@@ -124,25 +122,49 @@ impl Connector {
             };
             match UdpSocket::bind(SocketAddr::new(bind_local_ip, 0)).await {
                 Ok(socket) => {
-                    let local_addr = socket.local_addr().ok();
                     tracing::info!(
-                        local = ?local_addr,
+                        local = ?socket.local_addr().ok(),
                         remote = %server_udp_addr,
-                        "UDP audio socket bound (V3.1 step 2 — pas encore wired sur audio)"
+                        "session client avec audio UDP+FEC"
                     );
-                    drop(socket); // step 3 = passer à Session::start_with_udp(socket, server_udp_addr)
+                    match Session::start_with_udp(
+                        stream,
+                        outcome,
+                        std::sync::Arc::new(socket),
+                        Some(server_udp_addr),
+                        self.cfg.heartbeat_interval,
+                        self.cfg.heartbeat_timeout,
+                    ) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            tracing::warn!(
+                                error = ?e,
+                                "start_with_udp echec, fallback TCP audio"
+                            );
+                            // Pas de fallback possible sans re-construire la session ;
+                            // on propage l'échec.
+                            return Err(DriverError::Codec(format!("UDP audio init: {e}")));
+                        }
+                    }
                 }
                 Err(e) => {
                     tracing::warn!(error = %e, "client UDP bind echec — fallback TCP audio");
+                    Session::start(
+                        stream,
+                        outcome,
+                        self.cfg.heartbeat_interval,
+                        self.cfg.heartbeat_timeout,
+                    )
                 }
             }
-        }
-
-        Ok(Session::start(
-            stream,
-            outcome,
-            self.cfg.heartbeat_interval,
-            self.cfg.heartbeat_timeout,
-        ))
+        } else {
+            Session::start(
+                stream,
+                outcome,
+                self.cfg.heartbeat_interval,
+                self.cfg.heartbeat_timeout,
+            )
+        };
+        Ok(session)
     }
 }
