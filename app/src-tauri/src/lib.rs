@@ -17,13 +17,32 @@ use tauri::{
 };
 
 pub fn run() {
+    install_panic_hook();
     init_default();
 
     // Log au boot la disponibilité d'encodeurs H.264 hardware via Media
-    // Foundation. Best-effort, n'échoue jamais.
-    okvm_video::log_hardware_h264_status();
+    // Foundation. **CRITIQUE** : ce call doit tourner sur un thread séparé
+    // car `okvm_video::ensure_mf_init` fait `CoInitializeEx(MULTITHREADED)`
+    // sur le thread courant. Sur le main thread, ça empoisonne l'apartment
+    // COM et fait planter `tao::window::OleInitialize` (qui veut STA) avec
+    // `RPC_E_CHANGED_MODE` quelques secondes plus tard.
+    //
+    // Le thread spawn'é peut tranquillement vivre en MTA pour son log.
+    std::thread::spawn(|| {
+        okvm_video::log_hardware_h264_status();
+    });
 
-    let app_state = AppState::initialize().expect("init AppState");
+    let app_state = match AppState::initialize() {
+        Ok(s) => s,
+        Err(e) => {
+            // Sans windows_subsystem console on perd stdout/stderr — on
+            // écrit explicitement vers un fichier visible à l'utilisateur
+            // avant de paniquer pour préserver la trace.
+            let _ = write_crash_log(&format!("AppState::initialize a échoué: {e}\n"));
+            tracing::error!(error = %e, "AppState init: ABANDON");
+            panic!("init AppState: {e}");
+        }
+    };
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -299,4 +318,61 @@ fn persist_window_state(win: &tauri::WebviewWindow) {
     if let Err(e) = okvm_config::save_app_config(&cfg) {
         tracing::debug!(error = %e, "persist window state");
     }
+}
+
+/// Installe un panic hook qui écrit l'erreur (avec stack) dans
+/// `%LocalAppData%\Temp\oneclick-kvm-crash.log` avant le `process::exit`.
+///
+/// Justification : en release Tauri est buildé avec
+/// `windows_subsystem = "windows"`, donc le binaire n'a pas de console
+/// rattachée et `stderr` part dans le vide. Un panic devient invisible —
+/// l'utilisateur voit juste l'app qui ferme. Avec ce hook, on a au moins
+/// une trace écrite quelque part de prévisible.
+fn install_panic_hook() {
+    // Active la stack complète sans demander RUST_BACKTRACE=1 à l'utilisateur.
+    std::env::set_var("RUST_BACKTRACE", "full");
+
+    let default = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let payload = if let Some(s) = info.payload().downcast_ref::<&'static str>() {
+            (*s).to_string()
+        } else if let Some(s) = info.payload().downcast_ref::<String>() {
+            s.clone()
+        } else {
+            "<payload non-stringifiable>".to_string()
+        };
+        let loc = info
+            .location()
+            .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
+            .unwrap_or_else(|| "<location inconnue>".to_string());
+        let bt = std::backtrace::Backtrace::force_capture();
+        let msg = format!(
+            "=== OneClick KVM panic ===\nTimestamp: {:?}\nLocation: {loc}\nMessage: {payload}\n\nBacktrace:\n{bt}\n",
+            std::time::SystemTime::now()
+        );
+        let _ = write_crash_log(&msg);
+        // Laisse aussi le hook par défaut faire son boulot (stderr — qui
+        // sera silencieux en release, mais utile en debug).
+        default(info);
+    }));
+}
+
+/// Écrit dans `%LocalAppData%\Temp\oneclick-kvm-crash.log` (append).
+/// Best-effort : on ignore les erreurs (si on peut pas écrire le crash log,
+/// y a vraiment rien qu'on puisse faire).
+fn write_crash_log(msg: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    let dir = std::env::var_os("LOCALAPPDATA")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir);
+    let path = dir.join("Temp").join("oneclick-kvm-crash.log");
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)?;
+    f.write_all(msg.as_bytes())?;
+    Ok(())
 }

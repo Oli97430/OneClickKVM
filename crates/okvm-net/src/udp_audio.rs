@@ -34,7 +34,6 @@
 
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Duration;
 
 use parking_lot::Mutex;
 use tokio::net::UdpSocket;
@@ -263,6 +262,7 @@ pub fn spawn_pipe(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
     fn make_key() -> AeadKey {
         AeadKey::from_bytes([42u8; 32])
