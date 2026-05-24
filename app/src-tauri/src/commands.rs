@@ -427,17 +427,42 @@ pub async fn get_about_info(state: State<'_, AppState>) -> Result<AboutInfo, Str
         })
         .collect();
     let has_hw = h264_encoders.iter().any(|e| e.is_hardware);
-    // Probe MFT backend qui serait effectivement choisi (cf. V3.3 doc).
-    let mft_active = okvm_video::MfH264Encoder::probe_best_backend(okvm_video::H264Config {
+    let probe_cfg = okvm_video::H264Config {
         width: 320,
         height: 240,
         target_fps: 15,
         bitrate_kbps: 500,
-    });
-    let mft_active_str = match mft_active {
-        okvm_video::MfBackend::Software => "software (Microsoft CLSID_CMSH264EncoderMFT)".into(),
-        okvm_video::MfBackend::Hardware { friendly_name } => format!("hardware ({friendly_name})"),
     };
+    // V3.3.1 step 4 : essaie d'abord le path async (NVENC/AMF/QSV récents)
+    // qui est ce que `AnyH264Encoder::new` choisit en priorité. Si succès,
+    // affiche "async (NVIDIA H.264 Encoder MFT)" — l'utilisateur sait
+    // qu'il a du vrai GPU encoding. Sinon, fallback sur le sync probe.
+    let mft_active_str =
+        match okvm_video::MfH264AsyncEncoder::try_new(probe_cfg) {
+            Ok(enc) => match enc.backend() {
+                okvm_video::MfBackend::Hardware { friendly_name } => {
+                    format!("hardware async ({friendly_name}) — vrai GPU encoding 🚀")
+                }
+                okvm_video::MfBackend::Software => {
+                    // Théoriquement impossible : try_new_hardware ne renvoie
+                    // jamais Software. Fallback par sûreté.
+                    "software (async path inattendu)".into()
+                }
+            },
+            Err(_) => {
+                // Pas de path async dispo → on rapporte le sync path.
+                let sync_active =
+                    okvm_video::MfH264Encoder::probe_best_backend(probe_cfg);
+                match sync_active {
+                    okvm_video::MfBackend::Software => {
+                        "software sync (Microsoft CLSID_CMSH264EncoderMFT)".into()
+                    }
+                    okvm_video::MfBackend::Hardware { friendly_name } => {
+                        format!("hardware sync ({friendly_name})")
+                    }
+                }
+            }
+        };
     Ok(AboutInfo {
         app_name: "OneClick KVM".into(),
         version: env!("CARGO_PKG_VERSION").into(),
