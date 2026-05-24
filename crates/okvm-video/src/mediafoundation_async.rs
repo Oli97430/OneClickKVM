@@ -106,6 +106,37 @@ impl IMFAsyncCallback_Impl for EventBridge_Impl {
     }
 
     fn Invoke(&self, async_result: Option<&IMFAsyncResult>) -> windows::core::Result<()> {
+        // **Panic-safety** : `Invoke` est appelé depuis le thread pool de
+        // Media Foundation. Un panic Rust qui traverse la frontière COM est
+        // **comportement indéfini** — le runtime COM ne sait pas dérouler
+        // une stack avec des destructors Rust. Aujourd'hui le code interne
+        // n'a pas de panic path évident, mais defense in depth :
+        // - allocations (Vec::with_capacity, etc.) peuvent panic OOM
+        // - un futur changement peut introduire un `.unwrap()` accidentel
+        // - stack overflow toujours possible
+        //
+        // On wrap dans `catch_unwind` et on retourne E_FAIL au lieu de
+        // unwinder. `AssertUnwindSafe` : tous les states sont &self (refs
+        // partagées) — pas de risque d'observer un invariant cassé.
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.invoke_inner(async_result)
+        }));
+        match outcome {
+            Ok(r) => r,
+            Err(_) => {
+                tracing::error!("EventBridge::Invoke a paniqué — retourne E_FAIL au lieu d'UB COM");
+                Err(windows::core::Error::from_hresult(
+                    windows::Win32::Foundation::E_FAIL,
+                ))
+            }
+        }
+    }
+}
+
+impl EventBridge_Impl {
+    /// Implémentation interne d'`Invoke` — séparée pour permettre le wrap
+    /// `catch_unwind` autour.
+    fn invoke_inner(&self, async_result: Option<&IMFAsyncResult>) -> windows::core::Result<()> {
         let Some(result) = async_result else {
             return Ok(());
         };
@@ -125,14 +156,13 @@ impl IMFAsyncCallback_Impl for EventBridge_Impl {
         } else if event_type == METransformDrainComplete {
             MftEvent::DrainComplete
         } else {
-            // Event qu'on ne gère pas → forward un placeholder Other ?
-            // Pour l'instant on drop — le worker re-arm de toute façon
-            // à chaque event reçu.
+            // Event qu'on ne gère pas → drop. Le worker re-arm de toute
+            // façon à chaque event reçu.
             return Ok(());
         };
 
-        // Forward au worker. Si le channel est fermé (worker mort), on
-        // ignore silencieusement — on est en shutdown.
+        // Forward au worker. Si le channel est fermé (worker mort) ou le
+        // mutex poisoned, on ignore silencieusement — on est en shutdown.
         if let Ok(tx) = self.tx.lock() {
             let _ = tx.send(kind);
         }
@@ -301,7 +331,14 @@ impl MfH264AsyncEncoder {
             &mut self.nv12_buf,
         );
 
-        let ts_hns = self.frame_index as i64 * self.frame_duration_hns;
+        // Checked cast pour éviter le silent wrap. En pratique impossible
+        // d'atteindre `i64::MAX` (≈10 ans à 30 fps), mais le `as i64` était
+        // un code smell — le checked_mul + saturating fallback est gratuit
+        // et future-proof.
+        let ts_hns = i64::try_from(self.frame_index)
+            .ok()
+            .and_then(|n| n.checked_mul(self.frame_duration_hns))
+            .unwrap_or(i64::MAX);
         let frame = InputFrame {
             nv12: self.nv12_buf.clone(),
             ts_hns,
@@ -559,6 +596,17 @@ fn setup_async_mft(cfg: H264Config, event_tx: mpsc::Sender<MftEvent>) -> Result<
 ///
 /// Pour `HaveOutput`, on appelle ProcessOutput immédiatement et on push
 /// les NAL dans `output_tx`.
+/// Cap sur la queue d'input frames en attente d'être pushées au MFT.
+///
+/// Si NVENC est bottlenecké (4K@60fps sur GPU faible, ou GPU temporairement
+/// busy), les frames s'accumulent. Chaque `InputFrame` contient un `Vec<u8>`
+/// NV12 — à 4K c'est ~12 MB. Sans cap, 30 secondes de retard = 21 GB OOM.
+///
+/// Choix de 30 = ~1 seconde à 30 fps. Au-delà, on drop les plus vieilles
+/// (les "fraîches" sont plus utiles pour l'utilisateur — il préfère voir
+/// le présent qu'un passé en retard).
+const MAX_PENDING_INPUTS: usize = 30;
+
 fn worker_loop(
     transform: IMFTransform,
     event_rx: mpsc::Receiver<MftEvent>,
@@ -570,7 +618,8 @@ fn worker_loop(
 ) {
     let mut needs: u32 = 0;
     let mut pending_inputs: std::collections::VecDeque<InputFrame> =
-        std::collections::VecDeque::new();
+        std::collections::VecDeque::with_capacity(MAX_PENDING_INPUTS);
+    let mut dropped_total: u64 = 0;
 
     // Poll alterné event_rx / input_rx via recv_timeout pour ne pas
     // bloquer indéfiniment dans l'un.
@@ -603,8 +652,22 @@ fn worker_loop(
             }
         }
 
-        // 2. Pump les input frames en non-bloquant.
+        // 2. Pump les input frames en non-bloquant, en respectant le cap
+        //    `MAX_PENDING_INPUTS` (drop oldest pour faire de la place).
         while let Ok(frame) = input_rx.try_recv() {
+            if pending_inputs.len() >= MAX_PENDING_INPUTS {
+                let _dropped = pending_inputs.pop_front();
+                dropped_total = dropped_total.saturating_add(1);
+                // Log par puissance de 2 pour ne pas spammer (1, 2, 4, ...).
+                if dropped_total.is_power_of_two() {
+                    tracing::warn!(
+                        dropped_total,
+                        queue_cap = MAX_PENDING_INPUTS,
+                        "mf-async-worker: input queue saturée — \
+                         drop frames anciennes (NVENC bottlenecked ?)"
+                    );
+                }
+            }
             pending_inputs.push_back(frame);
         }
 
