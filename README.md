@@ -179,7 +179,7 @@ Guide pas-à-pas + 7 scénarios E2E : [docs/TESTING.md](docs/TESTING.md).
 
 ## Statut
 
-Version actuelle : **0.1.2** (alpha, prêt pour usage personnel sur LAN de confiance).
+Version actuelle : **0.1.3** (alpha, prêt pour usage personnel sur LAN de confiance).
 
 - ✅ 30+ fonctionnalités implémentées (KM, audio, vidéo, fichiers, clipboard, WoL, etc.)
 - ✅ 91 tests unitaires + intégration passants (`RUSTFLAGS=-D warnings` strict)

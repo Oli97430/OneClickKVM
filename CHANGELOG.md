@@ -7,6 +7,15 @@ versions sémantiques [SemVer](https://semver.org/lang/fr/).
 
 ## [Unreleased] — non publié sur GitHub Releases
 
+(rien pour l'instant — voir [0.1.3] ci-dessous)
+
+## [0.1.3] — 2026-05-24
+
+**Release majeure post-v0.1.2** : vrai GPU encoding NVENC/AMF/QSV
+(V3.3.1), diagnostic visible (file logger + bouton UI), durcissement
+post-régression (debug_assert, boot tracing), code review fixes
+(panic-safety COM callback + queue OOM cap).
+
 ### Ajouté — V3.3.1 : vrai hardware encoding NVENC/AMF/QSV
 
 **Premier vrai GPU H.264 encoding** sur les MFTs async-mode (NVIDIA,
@@ -70,6 +79,23 @@ IMFMediaEventGenerator` en upvars.
   `pnpm/action-setup@v6`, `softprops/action-gh-release@v3`.
   Supprime le warning Node.js 20 deprecation vu dans la build
   v0.1.2 release.
+
+### Corrigé — Code review V3.3.1
+
+Suite à un `/code-review` du module `mediafoundation_async.rs` :
+
+- **Panic-safety dans `IMFAsyncCallback::Invoke`** : wrap dans
+  `std::panic::catch_unwind` pour éviter l'UB si un panic Rust traverse
+  la frontière COM (le runtime COM ne sait pas dérouler une stack avec
+  des destructors Rust). Defense in depth — pas de panic path connu
+  actuellement, mais protège contre OOM/stack overflow/futurs unwrap.
+- **Cap `pending_inputs` à 30 frames** : la queue d'input du worker
+  était non bornée → OOM risk si NVENC bottlenecked (12 MB par frame à
+  4K, 30 sec retard = 21 GB). Drop oldest avec warn logged en puissance
+  de 2.
+- **Safe checked cast** pour `frame_index → ts_hns` : remplace
+  `as i64` par `i64::try_from + checked_mul`. Élimine le code smell
+  silent-wrap (impossible en pratique mais future-proof).
 
 ## [0.1.2] — 2026-05-23
 
