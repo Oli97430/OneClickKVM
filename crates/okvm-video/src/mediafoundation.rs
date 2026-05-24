@@ -45,6 +45,25 @@ use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
 /// appel. Renvoie le même `Result` à chaque invocation suivante (évite de
 /// re-tenter en cas d'échec définitif type "DLL absente").
 ///
+/// # ⚠️ Contrat d'appel — apartment COM
+///
+/// Ce call **empoisonne le thread courant en MTA** (Multi-Threaded Apartment).
+/// Une fois fait, ce thread NE PEUT PLUS jamais être basculé en STA — toute
+/// tentative ultérieure d'`OleInitialize()` ou `CoInitializeEx(APARTMENTTHREADED)`
+/// échouera avec `RPC_E_CHANGED_MODE` (0x80010106).
+///
+/// **Conséquence pratique** : ne JAMAIS appeler cette fonction depuis le main
+/// thread d'une app Tauri/winit/tao avant l'init de la fenêtre — Tauri's `tao`
+/// event loop fait `OleInitialize(STA)` à la création de la première fenêtre
+/// (pour drag&drop) et plantera.
+///
+/// **Pattern correct** : si appelé depuis le main thread d'une app GUI, le
+/// faire dans un `std::thread::spawn(|| ensure_mf_init())`. Le thread enfant
+/// peut tranquillement vivre en MTA.
+///
+/// Régression historique : v0.1.1 (`a1165cf` — crash silencieux 3 s après boot,
+/// cf. CHANGELOG [0.1.2]).
+///
 /// # Erreurs
 /// Stringifiées si `CoInitializeEx` ou `MFStartup` échouent au premier appel.
 #[cfg(windows)]
@@ -52,6 +71,19 @@ pub fn ensure_mf_init() -> std::result::Result<(), String> {
     use std::sync::OnceLock;
     static INIT: OnceLock<std::result::Result<(), String>> = OnceLock::new();
     INIT.get_or_init(|| {
+        // Debug-only : alerte si on est en train d'init COM sur le thread
+        // nommé "main" d'une app GUI. En release c'est compilé out — pas
+        // overhead. En debug ça nous prévient AVANT de tomber sur le crash.
+        debug_assert!(
+            !is_main_thread(),
+            "okvm_video::ensure_mf_init appelé sur le main thread — \
+             ça va empoisonner l'apartment COM en MTA et faire planter \
+             Tauri/tao avec RPC_E_CHANGED_MODE quelques secondes plus tard. \
+             Utilise std::thread::spawn(|| ensure_mf_init()). \
+             Cf. CHANGELOG [0.1.2] pour le contexte de la régression."
+        );
+
+        tracing::debug!("ensure_mf_init: première init COM/MF sur ce process");
         // SAFETY: appels Win32 standards. S_FALSE = déjà init dans le thread,
         // non fatal.
         unsafe {
@@ -66,6 +98,23 @@ pub fn ensure_mf_init() -> std::result::Result<(), String> {
         }
     })
     .clone()
+}
+
+/// Détecte heuristiquement si le thread courant est le main thread Tauri.
+///
+/// Sur Windows, l'API `GetCurrentThreadId() == GetMainThreadId()` n'existe pas
+/// directement — on utilise une heuristique : le main thread n'a pas de nom
+/// (Rust ne nomme pas le main thread par défaut) ET son `ThreadId` est petit.
+/// Spawn'd threads ont des `ThreadId` croissants.
+///
+/// Best-effort : faux négatifs OK (debug_assert silencieux), faux positifs
+/// rares (worker thread précoce). Si jamais le faux positif gêne, le caller
+/// peut annoter son thread avec `std::thread::Builder::new().name("mf-worker")`.
+#[cfg(windows)]
+fn is_main_thread() -> bool {
+    // Le main thread n'a pas de name par défaut. Un thread sans nom + parmi
+    // les premiers spawnés est probablement le main.
+    std::thread::current().name().is_none()
 }
 
 /// Description d'un encodeur H.264 détecté.

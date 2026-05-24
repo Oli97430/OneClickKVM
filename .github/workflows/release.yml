@@ -26,7 +26,7 @@ jobs:
     permissions:
       contents: write # nécessaire pour attacher des assets à la release
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Detect tag
         id: tag
@@ -49,7 +49,7 @@ jobs:
           targets: x86_64-pc-windows-msvc
 
       - name: Cache cargo registry + target
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry/index
@@ -59,12 +59,12 @@ jobs:
           key: release-${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: 10
 
@@ -99,7 +99,7 @@ jobs:
           "$sha  $($installer.Name)" | Out-File -FilePath "sha256.txt" -Encoding utf8
 
       - name: Upload to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: OneClick KVM ${{ steps.tag.outputs.version }}

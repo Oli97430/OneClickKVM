@@ -19,6 +19,11 @@ use tauri::{
 pub fn run() {
     install_panic_hook();
     init_default();
+    tracing::info!(
+        version = env!("CARGO_PKG_VERSION"),
+        target = "x86_64-pc-windows-msvc",
+        "boot: OneClick KVM démarre"
+    );
 
     // Log au boot la disponibilité d'encodeurs H.264 hardware via Media
     // Foundation. **CRITIQUE** : ce call doit tourner sur un thread séparé
@@ -27,11 +32,19 @@ pub fn run() {
     // COM et fait planter `tao::window::OleInitialize` (qui veut STA) avec
     // `RPC_E_CHANGED_MODE` quelques secondes plus tard.
     //
-    // Le thread spawn'é peut tranquillement vivre en MTA pour son log.
-    std::thread::spawn(|| {
-        okvm_video::log_hardware_h264_status();
-    });
+    // Le thread spawn'é peut tranquillement vivre en MTA pour son log. Le
+    // nommer permet à `okvm_video::ensure_mf_init` debug_assert d'éviter
+    // les faux positifs sur cet appel légitime.
+    let _ = std::thread::Builder::new()
+        .name("mf-boot-probe".to_string())
+        .spawn(|| {
+            tracing::debug!("mf-boot-probe: enumeration H.264 démarre");
+            okvm_video::log_hardware_h264_status();
+            tracing::debug!("mf-boot-probe: terminé");
+        });
+    tracing::info!("boot: mf-boot-probe thread spawné, main thread libre pour Tauri/STA");
 
+    tracing::info!("boot: AppState::initialize() démarre");
     let app_state = match AppState::initialize() {
         Ok(s) => s,
         Err(e) => {
@@ -43,6 +56,7 @@ pub fn run() {
             panic!("init AppState: {e}");
         }
     };
+    tracing::info!("boot: AppState OK, démarre Tauri Builder");
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
