@@ -117,6 +117,10 @@ export interface AppConfig {
   redact_logs: boolean;
   h264_backend: H264BackendChoice;
   video_screen_idx: number;
+  /** Bitrate cible H.264 en kbps. Plage validée: 100–50000. */
+  video_bitrate_kbps: number;
+  /** FPS cible. Plage validée: 1–120. */
+  video_target_fps: number;
 }
 
 export interface ScreenView {

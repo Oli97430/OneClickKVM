@@ -450,11 +450,18 @@ impl AppState {
             );
             0
         };
+        // Clamp les valeurs user-set à des plages saines (cf. AppConfig
+        // doc — défense en profondeur si quelqu'un édite config.json
+        // directement avec des valeurs absurdes).
+        let bitrate = cfg.video_bitrate_kbps.clamp(100, 50_000);
+        let fps = cfg.video_target_fps.clamp(1, 120);
         let capture = WindowsCaptureSource {
             h264_backend: backend,
+            target_fps: fps,
+            h264_bitrate_kbps: bitrate,
             ..WindowsCaptureSource::default()
         };
-        tracing::info!(?backend, screen_idx, "video share start");
+        tracing::info!(?backend, screen_idx, bitrate, fps, "video share start");
         let handle = capture.start(screen_idx, tx).await?;
         *self.video_capture_handle.lock() = Some(handle);
 

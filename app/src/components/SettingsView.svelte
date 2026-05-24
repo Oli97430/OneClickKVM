@@ -165,6 +165,28 @@
         </label>
       {/if}
 
+      <label class="field">
+        <span class="label">
+          {t("settings.video_bitrate")} : <strong>{cfg.video_bitrate_kbps} kbps</strong>
+        </span>
+        <input
+          type="range"
+          min="200"
+          max="8000"
+          step="100"
+          bind:value={cfg.video_bitrate_kbps}
+        />
+        <span class="hint">{t("settings.video_bitrate.hint")}</span>
+      </label>
+
+      <label class="field">
+        <span class="label">
+          {t("settings.video_fps")} : <strong>{cfg.video_target_fps} fps</strong>
+        </span>
+        <input type="range" min="5" max="60" step="1" bind:value={cfg.video_target_fps} />
+        <span class="hint">{t("settings.video_fps.hint")}</span>
+      </label>
+
       <label class="field-row">
         <input type="checkbox" bind:checked={cfg.autostart} />
         <span>{t("settings.autostart")}</span>

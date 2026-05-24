@@ -55,6 +55,22 @@ pub struct AppConfig {
     /// moniteur qui n'existe plus, on retombe silencieusement sur 0.
     #[serde(default)]
     pub video_screen_idx: u32,
+    /// Bitrate cible H.264 en kbps. Defaut 1500 (≈720p15 raisonnable).
+    /// Plage suggérée : 500 (faible mais visible) → 8000 (excellent, 4K).
+    #[serde(default = "default_video_bitrate_kbps")]
+    pub video_bitrate_kbps: u32,
+    /// FPS cible de la capture/encoding. Defaut 15 (économique).
+    /// Plage : 5 (mode "presque slideshow") → 60 (gaming).
+    #[serde(default = "default_video_target_fps")]
+    pub video_target_fps: u32,
+}
+
+fn default_video_bitrate_kbps() -> u32 {
+    1500
+}
+
+fn default_video_target_fps() -> u32 {
+    15
 }
 
 fn default_h264_backend() -> H264BackendChoice {
@@ -103,6 +119,8 @@ impl Default for AppConfig {
             window_state: None,
             h264_backend: default_h264_backend(),
             video_screen_idx: 0,
+            video_bitrate_kbps: default_video_bitrate_kbps(),
+            video_target_fps: default_video_target_fps(),
         }
     }
 }
