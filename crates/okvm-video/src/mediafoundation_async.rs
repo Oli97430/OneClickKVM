@@ -183,6 +183,20 @@ struct InputFrame {
     dur_hns: i64,
 }
 
+/// Commandes envoyées depuis l'encoder vers le worker (séparées des
+/// `InputFrame` pour ne pas bloquer le pipeline frames si on doit aussi
+/// envoyer un command).
+#[derive(Debug)]
+enum WorkerCmd {
+    /// Marque le prochain frame comme keyframe (IDR).
+    ///
+    /// Plomberie : `ICodecAPI::SetValue(CODECAPI_AVEncVideoForceKeyFrame,
+    /// VARIANT_BOOL(TRUE))`. Supporté par NVENC, AMF, QSV, et le MFT
+    /// Microsoft. Non destructif (pas de flush — les frames pending
+    /// continuent leur cours, seul le prochain encode démarre un nouveau GOP).
+    ForceKeyframe,
+}
+
 /// API publique : encoder H.264 async-mode (NVENC / AMF / QSV récents).
 pub struct MfH264AsyncEncoder {
     /// Backend descriptor (toujours `MfBackend::Hardware`).
@@ -197,6 +211,8 @@ pub struct MfH264AsyncEncoder {
     frame_duration_hns: i64,
     /// Sender vers le worker (frames d'entrée).
     input_tx: mpsc::Sender<InputFrame>,
+    /// Sender de commandes au worker (force_keyframe, etc.).
+    cmd_tx: mpsc::Sender<WorkerCmd>,
     /// Receiver des NAL produits par le worker.
     output_rx: mpsc::Receiver<Vec<u8>>,
     /// Handle du worker thread (joined dans Drop).
@@ -242,6 +258,7 @@ impl MfH264AsyncEncoder {
         // transporter d'IMFTransform à travers le thread boundary — il
         // contient un NonNull<c_void> qui n'est pas Send).
         let (input_tx, input_rx) = mpsc::channel::<InputFrame>();
+        let (cmd_tx, cmd_rx) = mpsc::channel::<WorkerCmd>();
         let (output_tx, output_rx) = mpsc::channel::<Vec<u8>>();
         let (init_tx, init_rx) = mpsc::channel::<Result<String>>();
 
@@ -275,7 +292,7 @@ impl MfH264AsyncEncoder {
                 //    Le worker garde bridge + event_gen vivants pour re-armer
                 //    BeginGetEvent à chaque event reçu.
                 worker_loop(
-                    transform, event_rx, input_rx, output_tx, shutdown_w, bridge, event_gen,
+                    transform, event_rx, input_rx, cmd_rx, output_tx, shutdown_w, bridge, event_gen,
                 );
 
                 // _bridge_keepalive et _dxgi_keepalive sont drop ici (fin worker).
@@ -298,6 +315,7 @@ impl MfH264AsyncEncoder {
             frame_index: 0,
             frame_duration_hns,
             input_tx,
+            cmd_tx,
             output_rx,
             worker: Some(worker),
             shutdown,
@@ -358,17 +376,24 @@ impl MfH264AsyncEncoder {
         Ok(bitstream)
     }
 
-    /// Force le prochain frame à être un keyframe.
+    /// Force le prochain frame à être un keyframe (IDR).
     ///
-    /// **Stub V3.3.1** : no-op pour l'instant. NVENC/AMF émettent des
-    /// keyframes périodiquement par défaut (GOP size = 1 sec typique).
-    /// Une vraie implémentation enverrait un message COMMAND_FLUSH +
-    /// re-NOTIFY_BEGIN_STREAMING via un channel de commandes vers le
-    /// worker. Pour l'instant la première frame post-init est un IDR et
-    /// les suivantes suivent le GOP par défaut de l'encoder.
+    /// Utile pour la récupération après perte de paquet (UDP) : on émet
+    /// un IDR à la demande au lieu d'attendre le GOP périodique
+    /// (~2 sec par défaut), ce qui réduit la durée des artefacts
+    /// visuels côté receiver.
+    ///
+    /// **Implémentation** : envoie une commande au worker qui appellera
+    /// `ICodecAPI::SetValue(CODECAPI_AVEncVideoForceKeyFrame, TRUE)`
+    /// avant le prochain `ProcessInput`. Supporté par NVENC, AMF, QSV
+    /// et le MFT Microsoft software. **Non destructif** — pas de flush,
+    /// les frames pending continuent leur cours.
+    ///
+    /// Si le worker est mort (channel fermé), le call est ignoré
+    /// silencieusement — pas d'erreur visible au caller (c'est juste
+    /// un best-effort hint).
     pub fn force_keyframe(&mut self) {
-        // TODO V3.3.2 : implémenter via channel cmd → worker → COMMAND_FLUSH
-        //                + BEGIN_STREAMING + START_OF_STREAM.
+        let _ = self.cmd_tx.send(WorkerCmd::ForceKeyframe);
     }
 
     /// Bloque jusqu'à ce que le worker ait drainé tous les NAL pending,
@@ -607,15 +632,26 @@ fn setup_async_mft(cfg: H264Config, event_tx: mpsc::Sender<MftEvent>) -> Result<
 /// le présent qu'un passé en retard).
 const MAX_PENDING_INPUTS: usize = 30;
 
+#[allow(clippy::too_many_arguments)]
 fn worker_loop(
     transform: IMFTransform,
     event_rx: mpsc::Receiver<MftEvent>,
     input_rx: mpsc::Receiver<InputFrame>,
+    cmd_rx: mpsc::Receiver<WorkerCmd>,
     output_tx: mpsc::Sender<Vec<u8>>,
     shutdown: Arc<Mutex<bool>>,
     bridge: IMFAsyncCallback,
     event_gen: IMFMediaEventGenerator,
 ) {
+    // Cast vers ICodecAPI pour pouvoir setter CODECAPI_AVEncVideoForceKeyFrame.
+    // Pas tous les MFTs implémentent ICodecAPI — best-effort. NVENC, AMF, QSV
+    // et le MFT software Microsoft le supportent tous.
+    let codec_api: Option<windows::Win32::Media::MediaFoundation::ICodecAPI> =
+        transform.cast().ok();
+    if codec_api.is_none() {
+        tracing::debug!("mf-async-worker: ICodecAPI non disponible — force_keyframe sera un no-op");
+    }
+
     let mut needs: u32 = 0;
     let mut pending_inputs: std::collections::VecDeque<InputFrame> =
         std::collections::VecDeque::with_capacity(MAX_PENDING_INPUTS);
@@ -649,6 +685,38 @@ fn worker_loop(
             // pièges d'obtenir une self-ref depuis un trait impl.
             if let Err(e) = unsafe { event_gen.BeginGetEvent(&bridge, None) } {
                 tracing::warn!(error = %e, "mf-async-worker: BeginGetEvent re-arm échec");
+            }
+        }
+
+        // 1bis. Pump les commandes worker (force_keyframe, etc.) en
+        //       non-bloquant. Appliquées immédiatement au transform via
+        //       ICodecAPI (si dispo).
+        while let Ok(cmd) = cmd_rx.try_recv() {
+            match cmd {
+                WorkerCmd::ForceKeyframe => {
+                    if let Some(api) = &codec_api {
+                        // VARIANT VT_BOOL = TRUE — la conversion via
+                        // From<bool> est fournie par windows-core.
+                        let var: windows::core::VARIANT = true.into();
+                        // SAFETY: api et var sont vivants pendant l'appel,
+                        // CODECAPI_AVEncVideoForceKeyFrame est un GUID const.
+                        let res = unsafe {
+                            api.SetValue(
+                                &windows::Win32::Media::MediaFoundation::CODECAPI_AVEncVideoForceKeyFrame,
+                                &raw const var as *const _,
+                            )
+                        };
+                        match res {
+                            Ok(()) => tracing::debug!(
+                                "mf-async-worker: force_keyframe appliqué (prochain frame = IDR)"
+                            ),
+                            Err(e) => tracing::warn!(
+                                error = %e,
+                                "mf-async-worker: force_keyframe SetValue échec"
+                            ),
+                        }
+                    }
+                }
             }
         }
 

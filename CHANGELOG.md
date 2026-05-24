@@ -7,7 +7,22 @@ versions sémantiques [SemVer](https://semver.org/lang/fr/).
 
 ## [Unreleased] — non publié sur GitHub Releases
 
-(rien pour l'instant — voir [0.1.3] ci-dessous)
+### Ajouté — V3.3.2 : `force_keyframe()` réel sur l'async encoder
+
+`MfH264AsyncEncoder::force_keyframe()` n'est plus un no-op stub. Le
+worker thread reçoit maintenant une commande `WorkerCmd::ForceKeyframe`
+via un nouveau `cmd_tx` channel et applique
+`ICodecAPI::SetValue(CODECAPI_AVEncVideoForceKeyFrame, TRUE)` avant le
+prochain `ProcessInput`. Le MFT émet alors un IDR (pas de FLUSH
+destructif — les frames pending continuent leur cours).
+
+**Use case** : récupération après perte de paquet UDP. Avant, il fallait
+attendre le prochain GOP périodique (~2 sec) pour que les artefacts
+disparaissent côté receiver. Maintenant, le caller peut demander un IDR
+à la demande.
+
+Best-effort : si le MFT ne supporte pas `ICodecAPI` (rare, mais
+possible sur des MFTs custom), le call est un no-op silencieux.
 
 ## [0.1.3] — 2026-05-24
 
