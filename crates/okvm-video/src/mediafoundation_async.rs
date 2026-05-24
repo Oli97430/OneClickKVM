@@ -33,10 +33,10 @@
 //! - ✅ ProcessInput / ProcessOutput : test
 //!   `encode_synthetic_frames_produces_nal` valide qu'on obtient ~125 KB
 //!   de bitstream Annex-B valide à partir de 60 frames RGB 320x240.
-//!
-//! **À valider** (V3.3.1 step 3) : décodage croisé du bitstream produit
-//! par un decoder de référence (openh264) pour vérifier la conformité,
-//! pas juste la présence des start codes.
+//! - ✅ **Décodage croisé via openh264** : test
+//!   `encode_async_then_decode_with_openh264` prouve que le bitstream
+//!   NVENC est conforme H.264 — openh264 (decoder indépendant) récupère
+//!   width/height correctement.
 //!
 //! **Pas encore wired dans le pipeline app** : `win32.rs` utilise
 //! toujours `MfH264Encoder` sync. Le bascule auto se fera quand on aura
@@ -809,5 +809,81 @@ mod tests {
             }
         }
         v
+    }
+
+    /// V3.3.1 step 3 : valide que le bitstream NVENC est conforme H.264 en
+    /// le décodant avec openh264 (decoder de référence indépendant).
+    ///
+    /// Skip si init MFT async impossible. Strictement plus fort que
+    /// `encode_synthetic_frames_produces_nal` qui ne vérifie que les start
+    /// codes — ici on prouve qu'un decoder externe peut récupérer width/height.
+    #[test]
+    fn encode_async_then_decode_with_openh264() {
+        use crate::h264::H264Decoder;
+
+        let cfg = H264Config {
+            width: 320,
+            height: 240,
+            target_fps: 30,
+            bitrate_kbps: 500,
+        };
+        let Ok(mut enc) = MfH264AsyncEncoder::try_new(cfg) else {
+            println!("skip : init MFT async impossible sur cette machine");
+            return;
+        };
+        let mut dec = H264Decoder::new().expect("openh264 decoder init");
+
+        let mut decoded_any = false;
+        let mut total_bytes = 0usize;
+        for i in 0..120u32 {
+            let rgb = make_test_rgb(cfg.width as usize, cfg.height as usize, i as u8);
+            let nal = match enc.encode_rgb(&rgb) {
+                Ok(b) => b,
+                Err(e) => {
+                    println!("encode_rgb frame {i} échec: {e}");
+                    continue;
+                }
+            };
+            if nal.is_empty() {
+                std::thread::sleep(Duration::from_millis(15));
+                continue;
+            }
+            total_bytes += nal.len();
+            match dec.decode(&nal) {
+                Ok(Some((w, h, _))) => {
+                    println!("✓ openh264 a décodé une frame {w}×{h} (frame #{i})");
+                    assert_eq!(w, cfg.width);
+                    assert_eq!(h, cfg.height);
+                    decoded_any = true;
+                    break;
+                }
+                Ok(None) => {
+                    // Pas encore assez d'input pour le decoder.
+                }
+                Err(e) => {
+                    panic!(
+                        "openh264 decode ERROR sur le bitstream NVENC frame {i}: {e:?} \
+                         (bitstream invalide ?)"
+                    );
+                }
+            }
+            std::thread::sleep(Duration::from_millis(15));
+        }
+        // Drain pour capturer les dernières frames.
+        if !decoded_any {
+            if let Ok(tail) = enc.drain() {
+                total_bytes += tail.len();
+                if let Ok(Some((w, h, _))) = dec.decode(&tail) {
+                    println!("✓ openh264 a décodé une frame {w}×{h} via drain");
+                    decoded_any = true;
+                }
+            }
+        }
+        println!("Total NVENC bitstream: {total_bytes} bytes");
+        assert!(
+            decoded_any,
+            "openh264 n'a décodé AUCUNE frame du bitstream NVENC ({total_bytes} bytes) — \
+             le bitstream n'est probablement pas conforme H.264 Annex-B"
+        );
     }
 }
