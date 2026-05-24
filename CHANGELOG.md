@@ -7,7 +7,38 @@ versions sémantiques [SemVer](https://semver.org/lang/fr/).
 
 ## [Unreleased] — non publié sur GitHub Releases
 
-(rien pour l'instant — voir [0.1.2] ci-dessous)
+### Ajouté — Diagnostic & robustesse
+
+- **File logger rotatif** : `tracing-appender` 0.2 ajouté, nouvelle
+  fonction `okvm_logging::init_with_file()` qui écrit les events JSON
+  dans `%LocalAppData%\OneClick\OneClickKVM\data\logs\app.log.<date>`
+  (rotation quotidienne, non-bloquant via worker thread).
+- **Bouton "Ouvrir les logs"** dans Settings → Dossiers, à côté des
+  boutons existants "Open config" et "Open inbox". Permet de partager
+  les logs JSON en cas de bug sans naviguer dans le filesystem.
+- **Boot tracing détaillé** : 4 `tracing::info!` aux étapes critiques
+  (démarrage, mf-boot-probe spawn, AppState init début/fin) — toutes
+  visibles dans le fichier de log. La prochaine régression boot sera
+  diagnosticable en 1 lecture.
+
+### Corrigé — Anti-régression apartment COM
+
+- `okvm_video::ensure_mf_init` a maintenant un `debug_assert!` qui
+  fire si appelé depuis un thread sans nom (heuristique = main thread).
+  Cargo tests ont des threads nommés → pas de faux positifs.
+- Doc explicite que ce call empoisonne le thread courant en MTA et
+  comment l'appeler depuis une app GUI (toujours `std::thread::spawn`).
+- Référence historique au crash v0.1.2 dans la doc pour traçabilité.
+- Le spawn dans `lib.rs::run()` est maintenant nommé `mf-boot-probe`
+  (évite le debug_assert + facilite le grep dans les logs).
+
+### CI infra
+
+- Bump GitHub Actions vers versions Node.js 24 :
+  `actions/checkout@v6`, `actions/setup-node@v6`, `actions/cache@v5`,
+  `pnpm/action-setup@v6`, `softprops/action-gh-release@v3`.
+  Supprime le warning Node.js 20 deprecation vu dans la build
+  v0.1.2 release.
 
 ## [0.1.2] — 2026-05-23
 
