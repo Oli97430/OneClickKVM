@@ -1078,4 +1078,81 @@ mod tests {
              le bitstream n'est probablement pas conforme H.264 Annex-B"
         );
     }
+
+    /// V3.3.2 + V3.3.3 : exerce force_keyframe + drain dans un scénario
+    /// réaliste. Vérifie que :
+    /// 1. force_keyframe() ne panic pas et est silencieux (best-effort).
+    /// 2. drain() retourne **avant le timeout 2s** — preuve que
+    ///    METransformDrainComplete a été reçu et que l'ack channel marche.
+    /// 3. drain() ne droppe pas trop de NAL (au moins le bitstream
+    ///    pré-drain est sorti).
+    ///
+    /// Skip si pas de MFT hardware async dispo.
+    #[test]
+    fn force_keyframe_and_drain_round_trip() {
+        let cfg = H264Config {
+            width: 320,
+            height: 240,
+            target_fps: 30,
+            bitrate_kbps: 500,
+        };
+        let Ok(mut enc) = MfH264AsyncEncoder::try_new(cfg) else {
+            println!("skip : MFT async indisponible");
+            return;
+        };
+
+        // 1. Encode 30 frames (1 sec).
+        let mut bytes_before = 0usize;
+        for i in 0..30u32 {
+            let rgb = make_test_rgb(cfg.width as usize, cfg.height as usize, i as u8);
+            if let Ok(n) = enc.encode_rgb(&rgb) {
+                bytes_before += n.len();
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        println!("✓ Phase 1 : 30 frames → {bytes_before} bytes");
+
+        // 2. force_keyframe — doit être un no-op silencieux (pas de panic).
+        let t0 = std::time::Instant::now();
+        enc.force_keyframe();
+        assert!(
+            t0.elapsed() < Duration::from_millis(50),
+            "force_keyframe() devrait être quasi-instantané (envoie juste un msg sur un channel)"
+        );
+        println!("✓ force_keyframe() OK ({:?})", t0.elapsed());
+
+        // 3. Encode 30 frames de plus — la 1ère devrait être un IDR
+        //    (mais on ne peut pas vérifier sans décoder).
+        let mut bytes_after = 0usize;
+        for i in 30..60u32 {
+            let rgb = make_test_rgb(cfg.width as usize, cfg.height as usize, i as u8);
+            if let Ok(n) = enc.encode_rgb(&rgb) {
+                bytes_after += n.len();
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        println!("✓ Phase 2 : 30 frames post-keyframe → {bytes_after} bytes");
+
+        // 4. drain — DOIT retourner avant le timeout interne 2s.
+        let t0 = std::time::Instant::now();
+        let tail = enc
+            .drain()
+            .expect("drain() retourne Ok même si rien à drainer");
+        let drain_elapsed = t0.elapsed();
+        println!(
+            "✓ drain() retourné en {drain_elapsed:?} avec {} bytes",
+            tail.len()
+        );
+        // Si le timeout 2s a été atteint, drain a quand même renvoyé OK
+        // mais avec un warn. La preuve que DrainComplete a marché est
+        // que drain est plus rapide que le timeout.
+        assert!(
+            drain_elapsed < Duration::from_millis(1500),
+            "drain() a pris {drain_elapsed:?} — probable que METransformDrainComplete \
+             n'a pas été reçu (timeout 2s atteint, on retombe sur le path warn)"
+        );
+        let total = bytes_before + bytes_after + tail.len();
+        println!("Total bitstream : {total} bytes (avant + après keyframe + drain)");
+        assert!(total > 0, "aucun NAL produit après 60 frames + drain");
+    }
 }
