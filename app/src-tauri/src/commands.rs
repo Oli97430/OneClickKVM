@@ -98,10 +98,7 @@ pub async fn pair_with_peer(
 }
 
 #[tauri::command]
-pub async fn unpair_peer(
-    device_id: [u8; 32],
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn unpair_peer(device_id: [u8; 32], state: State<'_, AppState>) -> Result<(), String> {
     let did = okvm_core::DeviceId(device_id);
     let removed = state.sessions.lock().remove(&did);
     if let Some(sr) = removed {
@@ -150,11 +147,7 @@ pub async fn send_files(
     app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
     let did = okvm_core::DeviceId(device_id);
-    let files_tx = state
-        .sessions
-        .lock()
-        .get(&did)
-        .map(|s| s.files_tx.clone());
+    let files_tx = state.sessions.lock().get(&did).map(|s| s.files_tx.clone());
     let Some(tx) = files_tx else {
         return Err("session inconnue".into());
     };

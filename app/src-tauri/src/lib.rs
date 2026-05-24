@@ -7,7 +7,7 @@
 mod commands;
 mod state;
 
-use okvm_logging::init_default;
+use okvm_logging::{init_with_file, LoggingGuard};
 use state::AppState;
 
 use tauri::{
@@ -18,10 +18,14 @@ use tauri::{
 
 pub fn run() {
     install_panic_hook();
-    init_default();
+    // _logging_guard doit vivre pendant tout `run()` — sa destruction flush
+    // les logs fichier pending vers disque. On bind explicitement avec
+    // underscore-prefix pour signaler son rôle "RAII keeper".
+    let _logging_guard: LoggingGuard = init_with_file();
     tracing::info!(
         version = env!("CARGO_PKG_VERSION"),
         target = "x86_64-pc-windows-msvc",
+        log_dir = ?okvm_logging::log_dir().ok(),
         "boot: OneClick KVM démarre"
     );
 
@@ -117,10 +121,8 @@ pub fn run() {
                 if !placed {
                     if let Ok(Some(monitor)) = win.primary_monitor() {
                         let m_pos = monitor.position();
-                        let _ = win.set_position(tauri::PhysicalPosition::new(
-                            m_pos.x + 50,
-                            m_pos.y + 50,
-                        ));
+                        let _ = win
+                            .set_position(tauri::PhysicalPosition::new(m_pos.x + 50, m_pos.y + 50));
                     }
                 }
                 let _ = win.show();
@@ -143,7 +145,11 @@ pub fn run() {
             let menu = Menu::with_items(app, &[&open_item, &sep, &quit_item])?;
 
             let _tray = TrayIconBuilder::with_id("main-tray")
-                .icon(app.default_window_icon().cloned().ok_or("pas d'icone par defaut")?)
+                .icon(
+                    app.default_window_icon()
+                        .cloned()
+                        .ok_or("pas d'icone par defaut")?,
+                )
                 .tooltip(labels.tooltip)
                 .menu(&menu)
                 .show_menu_on_left_click(false)
@@ -269,13 +275,7 @@ fn tray_labels(lang: &str) -> TrayLabels {
 
 /// Vérifie qu'un rectangle (x,y,w,h) intersecte au moins un moniteur attaché
 /// à hauteur d'au moins 100 px. Sinon la fenêtre serait invisible.
-fn window_position_is_visible(
-    win: &tauri::WebviewWindow,
-    x: i32,
-    y: i32,
-    w: u32,
-    h: u32,
-) -> bool {
+fn window_position_is_visible(win: &tauri::WebviewWindow, x: i32, y: i32, w: u32, h: u32) -> bool {
     let monitors = match win.available_monitors() {
         Ok(m) => m,
         Err(_) => return false,

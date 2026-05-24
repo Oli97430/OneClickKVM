@@ -20,11 +20,9 @@ use parking_lot::Mutex;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
-use okvm_core::{Capabilities, DeviceId, Fingerprint, IdentityKeypair};
-use okvm_discovery::{
-    caps_bits, DiscoveredPeer, DiscoveryService, SelfAnnounce,
-};
 use okvm_audio::{AudioCapture, AudioPlayback, CpalCapture, CpalPlayback};
+use okvm_core::{Capabilities, DeviceId, Fingerprint, IdentityKeypair};
+use okvm_discovery::{caps_bits, DiscoveredPeer, DiscoveryService, SelfAnnounce};
 use okvm_files::FileReceiver;
 use okvm_input_capture::{InputCapture, Win32Capture};
 use okvm_input_inject::{InputInject, Win32Inject};
@@ -349,7 +347,10 @@ impl AppState {
 
         // Inbox des fichiers recus.
         let inbox_dir = directories::UserDirs::new()
-            .and_then(|u| u.document_dir().map(|d| d.join("OneClickKVM").join("Inbox")))
+            .and_then(|u| {
+                u.document_dir()
+                    .map(|d| d.join("OneClickKVM").join("Inbox"))
+            })
             .unwrap_or_else(|| std::path::PathBuf::from("OneClickKVM/Inbox"));
         let _ = std::fs::create_dir_all(&inbox_dir);
         let file_receiver = Arc::new(FileReceiver::new(inbox_dir.clone()));
@@ -393,7 +394,10 @@ impl AppState {
             failed_attempts: 0,
         };
         *self.pairing_mode.lock() = Some(pm.clone());
-        tracing::info!(expires_in_ms = duration.as_millis() as u64, "pairing mode active");
+        tracing::info!(
+            expires_in_ms = duration.as_millis() as u64,
+            "pairing mode active"
+        );
         pm
     }
 
@@ -458,8 +462,11 @@ impl AppState {
         let sessions_arc = self.sessions.clone();
         tokio::spawn(async move {
             while let Some(msg) = rx.recv().await {
-                let senders: Vec<mpsc::Sender<VideoMessage>> =
-                    sessions_arc.lock().values().map(|s| s.video_tx.clone()).collect();
+                let senders: Vec<mpsc::Sender<VideoMessage>> = sessions_arc
+                    .lock()
+                    .values()
+                    .map(|s| s.video_tx.clone())
+                    .collect();
                 for s in &senders {
                     let _ = s.try_send(msg.clone());
                 }
@@ -496,8 +503,11 @@ impl AppState {
         tokio::spawn(async move {
             while let Some(msg) = rx.recv().await {
                 // Snapshot des senders sous le lock (cheap), puis envoie sans lock.
-                let senders: Vec<mpsc::Sender<AudioMessage>> =
-                    sessions_arc.lock().values().map(|s| s.audio_tx.clone()).collect();
+                let senders: Vec<mpsc::Sender<AudioMessage>> = sessions_arc
+                    .lock()
+                    .values()
+                    .map(|s| s.audio_tx.clone())
+                    .collect();
                 for s in &senders {
                     // try_send : on prefere drop une frame que bloquer la capture.
                     let _ = s.try_send(msg.clone());
@@ -576,42 +586,46 @@ impl AppState {
         // === Branche le callback de progression sur le FileReceiver ===
         // (throttle a 4Hz pour ne pas spammer le frontend.)
         let app_for_progress = app.clone();
-        let last_emit = Arc::new(Mutex::new(std::time::Instant::now() - std::time::Duration::from_secs(60)));
-        self.file_receiver.set_on_progress(move |transfer_id, bytes_done, bytes_total, current_file| {
-            let now = std::time::Instant::now();
-            let should_emit = {
-                let mut g = last_emit.lock();
-                let elapsed = now.duration_since(*g);
-                let final_frame = bytes_done >= bytes_total && bytes_total > 0;
-                if elapsed >= std::time::Duration::from_millis(250) || final_frame {
-                    *g = now;
-                    true
-                } else {
-                    false
+        let last_emit = Arc::new(Mutex::new(
+            std::time::Instant::now() - std::time::Duration::from_secs(60),
+        ));
+        self.file_receiver.set_on_progress(
+            move |transfer_id, bytes_done, bytes_total, current_file| {
+                let now = std::time::Instant::now();
+                let should_emit = {
+                    let mut g = last_emit.lock();
+                    let elapsed = now.duration_since(*g);
+                    let final_frame = bytes_done >= bytes_total && bytes_total > 0;
+                    if elapsed >= std::time::Duration::from_millis(250) || final_frame {
+                        *g = now;
+                        true
+                    } else {
+                        false
+                    }
+                };
+                if should_emit {
+                    let state = if bytes_done >= bytes_total && bytes_total > 0 {
+                        "done"
+                    } else {
+                        "running"
+                    };
+                    let view = okvm_ipc::TransferProgressView {
+                        transfer_id: transfer_id.to_string(),
+                        direction: "inbound".into(),
+                        peer_name: String::new(),
+                        current_file: current_file.to_string(),
+                        bytes_done,
+                        bytes_total,
+                        state: state.into(),
+                        error: None,
+                    };
+                    let _ = emit_event(
+                        &app_for_progress,
+                        okvm_ipc::BackendEvent::TransferProgress { progress: view },
+                    );
                 }
-            };
-            if should_emit {
-                let state = if bytes_done >= bytes_total && bytes_total > 0 {
-                    "done"
-                } else {
-                    "running"
-                };
-                let view = okvm_ipc::TransferProgressView {
-                    transfer_id: transfer_id.to_string(),
-                    direction: "inbound".into(),
-                    peer_name: String::new(),
-                    current_file: current_file.to_string(),
-                    bytes_done,
-                    bytes_total,
-                    state: state.into(),
-                    error: None,
-                };
-                let _ = emit_event(
-                    &app_for_progress,
-                    okvm_ipc::BackendEvent::TransferProgress { progress: view },
-                );
-            }
-        });
+            },
+        );
 
         // === Listener TCP ===
         let listener_cfg = ListenerConfig {
@@ -627,72 +641,79 @@ impl AppState {
         // 4. Identité inconnue + pairing_mode inactif → UnknownPeer.
         let peers_for_acl = self.peers.clone();
         let pairing_for_acl = self.pairing_mode.clone();
-        let acl: okvm_net::listener::AclHook = Arc::new(move |ch| -> std::result::Result<(), RejectReason> {
-            let device_id = okvm_core::DeviceId(ch.identity_pub);
-            // 1. Déjà appairé ?
-            if peers_for_acl
-                .lock()
-                .get(&device_id)
-                .is_some_and(|p| p.paired)
-            {
-                return Ok(());
-            }
-            // 2-4. Vérifie le mode d'appairage. On garde le lock pendant TOUT
-            // le check + l'incrément du compteur d'attempts, pour éviter une
-            // course où un attaquant ferait N essais en parallèle et
-            // contournerait le plafond.
-            let mut g = pairing_for_acl.lock();
-            let pm = match g.as_ref() {
-                Some(pm) if pm.is_alive() => pm.clone(),
-                Some(_) => {
-                    *g = None;
-                    tracing::info!(?device_id, "ACL: pairing mode expiré ou bloqué");
-                    return Err(RejectReason::UnknownPeer);
+        let acl: okvm_net::listener::AclHook =
+            Arc::new(move |ch| -> std::result::Result<(), RejectReason> {
+                let device_id = okvm_core::DeviceId(ch.identity_pub);
+                // 1. Déjà appairé ?
+                if peers_for_acl
+                    .lock()
+                    .get(&device_id)
+                    .is_some_and(|p| p.paired)
+                {
+                    return Ok(());
                 }
-                None => {
-                    tracing::info!(?device_id, "ACL: unknown peer rejected (pairing mode off)");
-                    return Err(RejectReason::UnknownPeer);
-                }
-            };
-            // PIN obligatoire dans ce flow strict.
-            let Some(client_hash) = ch.pairing_pin_hash else {
-                // Pas de PIN fourni : on compte ça comme une tentative ratée
-                // (sinon un attaquant pourrait sonder sans incrémenter).
-                if let Some(pm_mut) = g.as_mut() {
-                    pm_mut.failed_attempts = pm_mut.failed_attempts.saturating_add(1);
-                    if pm_mut.failed_attempts >= MAX_PIN_ATTEMPTS {
-                        tracing::warn!(?device_id, "ACL: pairing mode désactivé (max attempts)");
+                // 2-4. Vérifie le mode d'appairage. On garde le lock pendant TOUT
+                // le check + l'incrément du compteur d'attempts, pour éviter une
+                // course où un attaquant ferait N essais en parallèle et
+                // contournerait le plafond.
+                let mut g = pairing_for_acl.lock();
+                let pm = match g.as_ref() {
+                    Some(pm) if pm.is_alive() => pm.clone(),
+                    Some(_) => {
                         *g = None;
+                        tracing::info!(?device_id, "ACL: pairing mode expiré ou bloqué");
+                        return Err(RejectReason::UnknownPeer);
                     }
-                }
-                tracing::info!(?device_id, "ACL: pin manquant");
-                return Err(RejectReason::PairingFailed);
-            };
-            // Recompute expected = SHA-256(pin || ch.nonce).
-            use sha2::{Digest, Sha256};
-            let mut h = Sha256::new();
-            h.update(pm.pin.as_bytes());
-            h.update(ch.nonce);
-            let expected = h.finalize();
-            // Constant-time comparison.
-            use subtle::ConstantTimeEq;
-            if expected.ct_eq(&client_hash).into() {
-                tracing::info!(?device_id, "ACL: pin OK, new pair accepted");
-                Ok(())
-            } else {
-                // Échec : incrémente, désactive si plafond atteint.
-                if let Some(pm_mut) = g.as_mut() {
-                    pm_mut.failed_attempts = pm_mut.failed_attempts.saturating_add(1);
-                    let n = pm_mut.failed_attempts;
-                    tracing::warn!(?device_id, attempts = n, "ACL: pin invalide");
-                    if n >= MAX_PIN_ATTEMPTS {
-                        tracing::warn!(?device_id, "ACL: pairing mode désactivé (max attempts)");
-                        *g = None;
+                    None => {
+                        tracing::info!(?device_id, "ACL: unknown peer rejected (pairing mode off)");
+                        return Err(RejectReason::UnknownPeer);
                     }
+                };
+                // PIN obligatoire dans ce flow strict.
+                let Some(client_hash) = ch.pairing_pin_hash else {
+                    // Pas de PIN fourni : on compte ça comme une tentative ratée
+                    // (sinon un attaquant pourrait sonder sans incrémenter).
+                    if let Some(pm_mut) = g.as_mut() {
+                        pm_mut.failed_attempts = pm_mut.failed_attempts.saturating_add(1);
+                        if pm_mut.failed_attempts >= MAX_PIN_ATTEMPTS {
+                            tracing::warn!(
+                                ?device_id,
+                                "ACL: pairing mode désactivé (max attempts)"
+                            );
+                            *g = None;
+                        }
+                    }
+                    tracing::info!(?device_id, "ACL: pin manquant");
+                    return Err(RejectReason::PairingFailed);
+                };
+                // Recompute expected = SHA-256(pin || ch.nonce).
+                use sha2::{Digest, Sha256};
+                let mut h = Sha256::new();
+                h.update(pm.pin.as_bytes());
+                h.update(ch.nonce);
+                let expected = h.finalize();
+                // Constant-time comparison.
+                use subtle::ConstantTimeEq;
+                if expected.ct_eq(&client_hash).into() {
+                    tracing::info!(?device_id, "ACL: pin OK, new pair accepted");
+                    Ok(())
+                } else {
+                    // Échec : incrémente, désactive si plafond atteint.
+                    if let Some(pm_mut) = g.as_mut() {
+                        pm_mut.failed_attempts = pm_mut.failed_attempts.saturating_add(1);
+                        let n = pm_mut.failed_attempts;
+                        tracing::warn!(?device_id, attempts = n, "ACL: pin invalide");
+                        if n >= MAX_PIN_ATTEMPTS {
+                            tracing::warn!(
+                                ?device_id,
+                                "ACL: pairing mode désactivé (max attempts)"
+                            );
+                            *g = None;
+                        }
+                    }
+                    Err(RejectReason::PairingFailed)
                 }
-                Err(RejectReason::PairingFailed)
-            }
-        });
+            });
         let listener = Listener::new(
             listener_cfg,
             self.identity.clone(),
@@ -730,10 +751,7 @@ impl AppState {
             device_id: self.identity.public,
             name: self.hostname.clone(),
             tcp_port: self.tcp_port,
-            capabilities_short: caps_bits::KM
-                | caps_bits::FILES
-                | caps_bits::WOL
-                | caps_bits::LOCK,
+            capabilities_short: caps_bits::KM | caps_bits::FILES | caps_bits::WOL | caps_bits::LOCK,
         };
         let (disc_tx, mut disc_rx) = mpsc::channel::<DiscoveredPeer>(32);
         let discovery = match DiscoveryService::start(announce, disc_tx, true, true) {
@@ -786,7 +804,10 @@ impl AppState {
                         existing.last_addr = view.last_addr.clone();
                     })
                     .or_insert_with(|| view.clone());
-                let _ = emit_event(&app_h2, okvm_ipc::BackendEvent::PeerDiscovered { peer: view });
+                let _ = emit_event(
+                    &app_h2,
+                    okvm_ipc::BackendEvent::PeerDiscovered { peer: view },
+                );
 
                 // === Auto-reconnect ===
                 // Si un pair appairé réapparaît sur le LAN sans qu'on ait de
@@ -978,9 +999,7 @@ impl AppState {
                     // Resolve grid UUID -> DeviceId (inverse mapping).
                     let device_id = {
                         let map = grid_map_arc.lock();
-                        map.iter()
-                            .find(|(_, u)| **u == target)
-                            .map(|(d, _)| *d)
+                        map.iter().find(|(_, u)| **u == target).map(|(d, _)| *d)
                     };
                     let Some(device_id) = device_id else {
                         tracing::warn!(target = ?target, "switch vers un grid_id sans mapping DeviceId");
@@ -990,7 +1009,10 @@ impl AppState {
                     let _ = suppress_tx.send(true);
                     current_target = Some(device_id);
 
-                    let sender_opt = sessions_arc.lock().get(&device_id).map(|s| s.input_tx.clone());
+                    let sender_opt = sessions_arc
+                        .lock()
+                        .get(&device_id)
+                        .map(|s| s.input_tx.clone());
                     if let Some(sender) = sender_opt {
                         let switch_msg = InputMessage::SwitchEnter {
                             from_peer: uuid::Uuid::nil(),
@@ -1013,7 +1035,10 @@ impl AppState {
 
                 // 2. Forwarde l'event vers la cible courante (s'il y en a une).
                 if let Some(target_id) = current_target {
-                    let sender_opt = sessions_arc.lock().get(&target_id).map(|s| s.input_tx.clone());
+                    let sender_opt = sessions_arc
+                        .lock()
+                        .get(&target_id)
+                        .map(|s| s.input_tx.clone());
                     if let Some(sender) = sender_opt {
                         if let Err(e) = sender.send(msg).await {
                             tracing::warn!(error = %e, "input forward echec, retour local");
@@ -1036,7 +1061,8 @@ impl AppState {
             okvm_ipc::BackendEvent::Notification {
                 level: okvm_ipc::NotificationLevel::Success,
                 title: "Mode master active".into(),
-                body: "Curseur partage selon les bords d'ecran et hotkeys (Ctrl+Alt+Win+1..9).".into(),
+                body: "Curseur partage selon les bords d'ecran et hotkeys (Ctrl+Alt+Win+1..9)."
+                    .into(),
             },
         );
         Ok(())
@@ -1084,11 +1110,7 @@ struct DispatchCtx {
     local_bbox: Rect,
 }
 
-fn register_session_with_grid(
-    session: Session,
-    ctx: &DispatchCtx,
-    app: &tauri::AppHandle,
-) {
+fn register_session_with_grid(session: Session, ctx: &DispatchCtx, app: &tauri::AppHandle) {
     let id = session.remote_identity;
     let fp = id.fingerprint();
     let name = session.remote_capabilities.os.hostname.clone();
@@ -1181,10 +1203,9 @@ fn register_session_with_grid(
                             decoded.and_then(|(w, h, rgb)| {
                                 let img = image::RgbImage::from_raw(w, h, rgb)?;
                                 let mut jpeg = Vec::with_capacity(64 * 1024);
-                                let mut enc =
-                                    image::codecs::jpeg::JpegEncoder::new_with_quality(
-                                        &mut jpeg, 80,
-                                    );
+                                let mut enc = image::codecs::jpeg::JpegEncoder::new_with_quality(
+                                    &mut jpeg, 80,
+                                );
                                 if enc
                                     .encode_image(&image::DynamicImage::ImageRgb8(img))
                                     .is_ok()
@@ -1270,7 +1291,9 @@ fn register_session_with_grid(
         .max()
         .unwrap_or(ctx.local_bbox.x + ctx.local_bbox.w);
 
-    let hotkey_index = u8::try_from(switch.grid.peers.len()).ok().filter(|&n| (1..=9).contains(&n));
+    let hotkey_index = u8::try_from(switch.grid.peers.len())
+        .ok()
+        .filter(|&n| (1..=9).contains(&n));
 
     let screens: Vec<okvm_core::ScreenInfo> = if remote_screens.is_empty() {
         vec![okvm_core::ScreenInfo {
@@ -1326,7 +1349,12 @@ fn persist_peers_from_ctx(ctx: &DispatchCtx) {
 
 fn bbox_of_screens(screens: &[okvm_core::ScreenInfo]) -> Rect {
     if screens.is_empty() {
-        return Rect { x: 0, y: 0, w: 1920, h: 1080 };
+        return Rect {
+            x: 0,
+            y: 0,
+            w: 1920,
+            h: 1080,
+        };
     }
     let mut min_x = i32::MAX;
     let mut min_y = i32::MAX;
