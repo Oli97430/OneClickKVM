@@ -321,6 +321,19 @@ impl MfH264AsyncEncoder {
         Ok(bitstream)
     }
 
+    /// Force le prochain frame à être un keyframe.
+    ///
+    /// **Stub V3.3.1** : no-op pour l'instant. NVENC/AMF émettent des
+    /// keyframes périodiquement par défaut (GOP size = 1 sec typique).
+    /// Une vraie implémentation enverrait un message COMMAND_FLUSH +
+    /// re-NOTIFY_BEGIN_STREAMING via un channel de commandes vers le
+    /// worker. Pour l'instant la première frame post-init est un IDR et
+    /// les suivantes suivent le GOP par défaut de l'encoder.
+    pub fn force_keyframe(&mut self) {
+        // TODO V3.3.2 : implémenter via channel cmd → worker → COMMAND_FLUSH
+        //                + BEGIN_STREAMING + START_OF_STREAM.
+    }
+
     /// Bloque jusqu'à ce que le worker ait drainé tous les NAL pending,
     /// puis retourne le bitstream final.
     ///

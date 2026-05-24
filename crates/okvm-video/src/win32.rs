@@ -292,11 +292,14 @@ struct CaptureFlags {
     frame_tx: std_mpsc::Sender<EncodedFrame>,
 }
 
-/// Wrapper dispatchant entre les deux backends H.264. Non-Send, créé dans le
-/// thread handler.
+/// Wrapper dispatchant entre les backends H.264 disponibles. Non-Send,
+/// créé dans le thread handler.
 enum AnyH264Encoder {
     Openh264(H264Encoder),
     MediaFoundation(MfH264Encoder),
+    /// V3.3.1 : path async-mode (NVENC, AMF, QSV récents). Sélectionné
+    /// en priorité sur `MediaFoundation` quand le backend est MF.
+    MediaFoundationAsync(crate::mediafoundation_async::MfH264AsyncEncoder),
 }
 
 impl AnyH264Encoder {
@@ -304,12 +307,14 @@ impl AnyH264Encoder {
         match self {
             Self::Openh264(e) => e.encode_rgb(rgb),
             Self::MediaFoundation(e) => e.encode_rgb(rgb),
+            Self::MediaFoundationAsync(e) => e.encode_rgb(rgb),
         }
     }
     fn force_keyframe(&mut self) {
         match self {
             Self::Openh264(e) => e.force_keyframe(),
             Self::MediaFoundation(e) => e.force_keyframe(),
+            Self::MediaFoundationAsync(e) => e.force_keyframe(),
         }
     }
 }
@@ -346,12 +351,36 @@ impl GraphicsCaptureApiHandler for FrameEncoderHandler {
                 H264Backend::Openh264 => H264Encoder::new(h264_cfg)
                     .ok()
                     .map(AnyH264Encoder::Openh264),
-                H264Backend::MediaFoundation => MfH264Encoder::new_best(h264_cfg)
-                    .inspect(|enc| {
-                        tracing::info!(backend = ?enc.backend(), "MFT encoder actif");
-                    })
-                    .ok()
-                    .map(AnyH264Encoder::MediaFoundation),
+                H264Backend::MediaFoundation => {
+                    // V3.3.1 : essaie d'abord le path async (NVENC/AMF/QSV
+                    // récents). Si dispo, on l'utilise — vrai hardware
+                    // encoding GPU. Sinon fallback sur le path sync
+                    // (Microsoft AVC DX12 ou software MFT).
+                    match crate::mediafoundation_async::MfH264AsyncEncoder::try_new(h264_cfg) {
+                        Ok(enc) => {
+                            tracing::info!(
+                                backend = ?enc.backend(),
+                                "MFT encoder ASYNC actif (NVENC/AMF/QSV)"
+                            );
+                            Some(AnyH264Encoder::MediaFoundationAsync(enc))
+                        }
+                        Err(e) => {
+                            tracing::info!(
+                                error = %e,
+                                "MFT async indisponible, fallback sync"
+                            );
+                            MfH264Encoder::new_best(h264_cfg)
+                                .inspect(|enc| {
+                                    tracing::info!(
+                                        backend = ?enc.backend(),
+                                        "MFT encoder sync actif"
+                                    );
+                                })
+                                .ok()
+                                .map(AnyH264Encoder::MediaFoundation)
+                        }
+                    }
+                }
             }
         } else {
             None
