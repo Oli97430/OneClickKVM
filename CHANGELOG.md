@@ -7,6 +7,37 @@ versions sémantiques [SemVer](https://semver.org/lang/fr/).
 
 ## [Unreleased] — non publié sur GitHub Releases
 
+### Ajouté — V3.3.1 : vrai hardware encoding NVENC/AMF/QSV
+
+**Premier vrai GPU H.264 encoding** sur les MFTs async-mode (NVIDIA,
+AMD, Intel récents). Avant : Microsoft AVC DX12 sync seulement, qui
+est un fallback. Maintenant : si NVENC est dispo, c'est ce qui est
+utilisé pour le partage écran.
+
+- Nouveau module `okvm_video::mediafoundation_async` (~660 lignes) :
+  wrapper async-mode MFT avec `IMFAsyncCallback` (via `#[implement]`
+  macro de windows-core), worker thread dédié, event loop avec
+  re-arm `BeginGetEvent` après chaque event.
+- API publique stable : `MfH264AsyncEncoder::try_new` /
+  `encode_rgb` / `force_keyframe` / `drain` — même contrat que
+  `MfH264Encoder` sync.
+- Wired dans `AnyH264Encoder` (`win32.rs`) : essai async en priorité,
+  fallback transparent vers sync si pas de GPU support.
+
+**Validation E2E** : 3 tests (`mediafoundation_async::tests::*`)
+- `try_new_async_does_not_panic` — init OK (NVENC activé sur machine de dev)
+- `encode_synthetic_frames_produces_nal` — 60 frames → ~125 KB de
+  bitstream Annex-B avec start codes valides
+- `encode_async_then_decode_with_openh264` — **decoder de référence
+  indépendant openh264 décode le bitstream NVENC** → preuve absolue de
+  conformité H.264. Width/height préservés (320×240).
+
+**Régression évitée** : V3.3.1 step 1 avait un transmute hack pour
+re-armer `BeginGetEvent` depuis l'intérieur de `Invoke` qui causait
+STATUS_ACCESS_VIOLATION dès la 1ère frame. Fix : re-arm depuis le
+worker thread qui détient `bridge: IMFAsyncCallback` + `event_gen:
+IMFMediaEventGenerator` en upvars.
+
 ### Ajouté — Diagnostic & robustesse
 
 - **File logger rotatif** : `tracing-appender` 0.2 ajouté, nouvelle
