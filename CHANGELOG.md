@@ -7,6 +7,27 @@ versions sémantiques [SemVer](https://semver.org/lang/fr/).
 
 ## [Unreleased] — non publié sur GitHub Releases
 
+(rien pour l'instant — voir [0.1.4] ci-dessous)
+
+## [0.1.4] — 2026-05-24
+
+**Release post-v0.1.3** : polish autour de l'async-mode MFT
+(drain propre, runtime bitrate, force_keyframe, UI tunables).
+
+### Ajouté — Settings UI : bitrate + fps configurables
+
+Sliders dans Settings → vidéo pour ajuster :
+- **Bitrate** : 200-8000 kbps (défaut 1500). Hint UX explicite.
+- **FPS** : 5-60 (défaut 15). Hint UX explicite.
+
+Plumbing : `AppConfig.video_bitrate_kbps` + `video_target_fps` avec
+defaults via `#[serde(default = ...)]` pour rétro-compat config.json.
+Clamp [100,50000] / [1,120] côté Rust (defense en profondeur).
+
+Take effect : au prochain "Share screen". Pour appliquer immédiatement
+pendant une session active, ce serait via `MfH264AsyncEncoder::set_bitrate()`
+(API existante, pas encore wirée au flow config-change).
+
 ### Ajouté — V3.3.4 : runtime bitrate change
 
 `MfH264AsyncEncoder::set_bitrate(kbps)` permet d'ajuster le bitrate
