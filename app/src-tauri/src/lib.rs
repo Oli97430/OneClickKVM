@@ -88,6 +88,7 @@ pub fn run() {
             commands::reset_all_settings,
             commands::open_config_dir,
             commands::open_inbox_dir,
+            commands::open_logs_dir,
             commands::start_pairing_mode,
             commands::stop_pairing_mode,
             commands::get_pairing_mode_status,

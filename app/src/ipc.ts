@@ -175,6 +175,11 @@ export async function openInboxDir(): Promise<void> {
   await invoke("open_inbox_dir");
 }
 
+/** Ouvre le dossier des logs JSON (`%LocalAppData%/OneClick/OneClickKVM/data/logs/`). */
+export async function openLogsDir(): Promise<void> {
+  await invoke("open_logs_dir");
+}
+
 export interface PairingModeView {
   active: boolean;
   pin: string | null;

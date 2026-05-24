@@ -5,6 +5,7 @@
     listLocalScreens,
     openConfigDir,
     openInboxDir,
+    openLogsDir,
     resetAllSettings,
     setAppConfig,
     type AppConfig,
@@ -91,6 +92,14 @@
   async function openInbox() {
     try {
       await openInboxDir();
+    } catch (e) {
+      pushNotification({ level: "error", title: "Echec ouverture", body: String(e) });
+    }
+  }
+
+  async function openLogs() {
+    try {
+      await openLogsDir();
     } catch (e) {
       pushNotification({ level: "error", title: "Echec ouverture", body: String(e) });
     }
@@ -195,6 +204,9 @@
           </button>
           <button class="ghost" onclick={openInbox}>
             📥 {t("settings.folders.open_inbox")}
+          </button>
+          <button class="ghost" onclick={openLogs}>
+            📋 {t("settings.folders.open_logs")}
           </button>
         </div>
         <p class="hint">{t("settings.folders.hint")}</p>

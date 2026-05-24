@@ -389,6 +389,20 @@ pub async fn open_inbox_dir(state: State<'_, AppState>) -> Result<(), String> {
     open_in_explorer(&dir).map_err(|e| e.to_string())
 }
 
+/// Ouvre dans l'explorateur Windows le dossier des logs
+/// (`%LocalAppData%\OneClick\OneClickKVM\data\logs\`).
+///
+/// Utile pour récupérer un crash log ou partager les events JSON avec un
+/// dev en cas de bug.
+#[tauri::command]
+pub async fn open_logs_dir() -> Result<(), String> {
+    let dir = okvm_logging::log_dir().map_err(|e| e.to_string())?;
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        return Err(format!("create_dir_all: {e}"));
+    }
+    open_in_explorer(&dir).map_err(|e| e.to_string())
+}
+
 #[cfg(windows)]
 fn open_in_explorer(path: &std::path::Path) -> Result<(), String> {
     // explorer.exe accepte un chemin et l'ouvre dans une nouvelle fenêtre.
