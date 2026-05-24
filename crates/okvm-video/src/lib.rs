@@ -86,6 +86,9 @@ pub mod mediafoundation;
 pub mod mediafoundation_encoder;
 
 #[cfg(windows)]
+pub mod mediafoundation_async;
+
+#[cfg(windows)]
 pub mod win32;
 
 #[cfg(windows)]
@@ -100,3 +103,6 @@ pub use mediafoundation::{
 
 #[cfg(windows)]
 pub use mediafoundation_encoder::{rgb_to_nv12, MfBackend, MfH264Encoder};
+
+#[cfg(windows)]
+pub use mediafoundation_async::MfH264AsyncEncoder;

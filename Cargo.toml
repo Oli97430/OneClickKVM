@@ -114,6 +114,9 @@ windows = { version = "0.58", features = [
     "Win32_Storage_FileSystem",
     "Win32_Globalization",
     "Win32_Media_MediaFoundation",
+    # V3.3.1 : permet d'implémenter IMFAsyncCallback via #[implement(...)]
+    # (génère les _Impl traits + glue COM).
+    "implement",
 ] }
 windows-core = "0.58"
 

@@ -615,8 +615,11 @@ impl Drop for MfH264Encoder {
 }
 
 // === Helpers de configuration des media types ===
+//
+// Visibilité `pub(crate)` pour que `mediafoundation_async` puisse les réutiliser
+// sans dupliquer 100 lignes de plumbing.
 
-fn create_output_type_h264(cfg: &H264Config) -> Result<IMFMediaType> {
+pub(crate) fn create_output_type_h264(cfg: &H264Config) -> Result<IMFMediaType> {
     // SAFETY: appels MF stockent les attributs dans l'IMFMediaType retourné.
     unsafe {
         let mt =
@@ -641,7 +644,7 @@ fn create_output_type_h264(cfg: &H264Config) -> Result<IMFMediaType> {
     }
 }
 
-fn create_input_type_nv12(cfg: &H264Config) -> Result<IMFMediaType> {
+pub(crate) fn create_input_type_nv12(cfg: &H264Config) -> Result<IMFMediaType> {
     unsafe {
         let mt =
             MFCreateMediaType().map_err(|e| Error::other(format!("MFCreateMediaType: {e}")))?;
@@ -665,7 +668,7 @@ fn pack_u64(hi: u32, lo: u32) -> u64 {
     (u64::from(hi) << 32) | u64::from(lo)
 }
 
-fn make_input_sample(nv12: &[u8], ts_hns: i64, dur_hns: i64) -> Result<IMFSample> {
+pub(crate) fn make_input_sample(nv12: &[u8], ts_hns: i64, dur_hns: i64) -> Result<IMFSample> {
     // SAFETY: tailles valides, on copie le contenu dans le buffer COM.
     unsafe {
         let buf_size = u32::try_from(nv12.len())
@@ -705,7 +708,7 @@ fn make_input_sample(nv12: &[u8], ts_hns: i64, dur_hns: i64) -> Result<IMFSample
     }
 }
 
-fn read_sample_bytes(sample: &IMFSample, out: &mut Vec<u8>) -> Result<()> {
+pub(crate) fn read_sample_bytes(sample: &IMFSample, out: &mut Vec<u8>) -> Result<()> {
     // SAFETY: on lit le seul buffer du sample.
     unsafe {
         let buf = sample

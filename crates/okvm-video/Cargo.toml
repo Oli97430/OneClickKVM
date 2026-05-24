@@ -21,6 +21,9 @@ openh264.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows.workspace = true
+# windows-core est requis directement (en plus de re-exports via `windows`)
+# parce que le macro `#[implement(...)]` expand vers `::windows_core::...`.
+windows-core.workspace = true
 windows-capture.workspace = true
 
 [lints]
