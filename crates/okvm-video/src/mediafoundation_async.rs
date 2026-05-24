@@ -200,6 +200,13 @@ enum WorkerCmd {
     /// peut alors bloquer sur `ack_rx.recv()` pour avoir la garantie
     /// que tous les NAL pending sont sortis avant de continuer.
     Drain { ack_tx: mpsc::Sender<()> },
+    /// V3.3.4 : ajuste le bitrate cible (en bits/seconde) à la volée.
+    ///
+    /// Plomberie : `ICodecAPI::SetValue(CODECAPI_AVEncCommonMeanBitRate,
+    /// VT_UI4(bits_per_sec))`. Pris en compte au prochain GOP (pas
+    /// instantané — l'encoder ré-évalue le rate control sur quelques
+    /// frames). Utile pour ABR adaptatif aux conditions réseau.
+    SetBitrate { bits_per_sec: u32 },
 }
 
 /// API publique : encoder H.264 async-mode (NVENC / AMF / QSV récents).
@@ -379,6 +386,22 @@ impl MfH264AsyncEncoder {
             bitstream.extend_from_slice(&nal);
         }
         Ok(bitstream)
+    }
+
+    /// Ajuste le bitrate cible à la volée (en kbps).
+    ///
+    /// Implémenté via `ICodecAPI::SetValue(CODECAPI_AVEncCommonMeanBitRate)`.
+    /// L'encoder ré-évalue son rate control sur les prochaines frames
+    /// (pas instantané — typiquement 1-2 GOP soit ~2-4 sec). Best-effort :
+    /// si le MFT ne supporte pas `ICodecAPI`, le call est un no-op silencieux.
+    ///
+    /// **Usage typique** : ABR adaptatif aux conditions réseau. Si le
+    /// receiver renvoie des stats de perte de paquets élevée, le caller
+    /// peut baisser le bitrate pour réduire la pression.
+    pub fn set_bitrate(&mut self, kbps: u32) {
+        let _ = self.cmd_tx.send(WorkerCmd::SetBitrate {
+            bits_per_sec: kbps.saturating_mul(1000),
+        });
     }
 
     /// Force le prochain frame à être un keyframe (IDR).
@@ -739,6 +762,29 @@ fn worker_loop(
                             Err(e) => tracing::warn!(
                                 error = %e,
                                 "mf-async-worker: force_keyframe SetValue échec"
+                            ),
+                        }
+                    }
+                }
+                WorkerCmd::SetBitrate { bits_per_sec } => {
+                    if let Some(api) = &codec_api {
+                        // VARIANT VT_UI4 (u32) pour CODECAPI_AVEncCommonMeanBitRate.
+                        let var: windows::core::VARIANT = bits_per_sec.into();
+                        // SAFETY: api + var vivants pendant l'appel.
+                        let res = unsafe {
+                            api.SetValue(
+                                &windows::Win32::Media::MediaFoundation::CODECAPI_AVEncCommonMeanBitRate,
+                                &raw const var as *const _,
+                            )
+                        };
+                        match res {
+                            Ok(()) => {
+                                tracing::info!(bits_per_sec, "mf-async-worker: bitrate ajusté")
+                            }
+                            Err(e) => tracing::warn!(
+                                error = %e,
+                                bits_per_sec,
+                                "mf-async-worker: SetBitrate échec (MFT ne supporte peut-être pas RT bitrate change)"
                             ),
                         }
                     }
@@ -1120,6 +1166,15 @@ mod tests {
             "force_keyframe() devrait être quasi-instantané (envoie juste un msg sur un channel)"
         );
         println!("✓ force_keyframe() OK ({:?})", t0.elapsed());
+
+        // 2bis. set_bitrate — pareil, fire-and-forget rapide.
+        let t0 = std::time::Instant::now();
+        enc.set_bitrate(800);
+        assert!(
+            t0.elapsed() < Duration::from_millis(50),
+            "set_bitrate() devrait être quasi-instantané"
+        );
+        println!("✓ set_bitrate(800kbps) OK ({:?})", t0.elapsed());
 
         // 3. Encode 30 frames de plus — la 1ère devrait être un IDR
         //    (mais on ne peut pas vérifier sans décoder).
