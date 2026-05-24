@@ -2,17 +2,50 @@
 
 Problèmes courants et leur résolution.
 
+## Première étape pour tout problème : lire les logs JSON
+
+OneClick KVM écrit tous ses events au format JSON structuré dans
+`%LocalAppData%\OneClick\OneClickKVM\data\logs\app.log.<date>`. Pour y
+accéder facilement :
+
+- **Depuis l'UI** : Settings → Dossiers → 📋 *Ouvrir les logs*
+- **Depuis PowerShell** :
+  ```powershell
+  explorer.exe "$env:LocalAppData\OneClick\OneClickKVM\data\logs"
+  ```
+
+Si l'app crash AVANT que le file logger soit init (très rare — c'est la
+2ᵉ ligne de `run()`), regarde aussi :
+`%LocalAppData%\Temp\oneclick-kvm-crash.log` (panic hook). Cf. v0.1.2
+release notes pour le contexte de ce fichier.
+
+Les logs **ne contiennent pas de payload sensible** (pas de touches, pas
+de clés, pas de contenu clipboard) — `okvm-logging` est conçu pour
+être safe à partager.
+
 ## L'app ne démarre pas / page blanche
 
-1. **Vérifier WebView2** : Windows 11 l'a en standard, mais sur Windows 10
+1. **Lire `app.log.<date>`** (cf. ci-dessus) ou
+   `%LocalAppData%\Temp\oneclick-kvm-crash.log` si elle a crashé tôt.
+2. **Vérifier WebView2** : Windows 11 l'a en standard, mais sur Windows 10
    il faut parfois l'installer depuis
    [microsoft.com/edge/webview2](https://developer.microsoft.com/microsoft-edge/webview2/)
-   (Evergreen Bootstrapper).
-2. **Vérifier les logs Windows** : Event Viewer → Applications and Services
-   Logs → filtrer par source `OneClickKVM`.
-3. **Reset complet de la config** : depuis Settings → "Réinitialiser toute
+   (Evergreen Bootstrapper). Vérifier dans :
+   `HKLM\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}`.
+3. **Vérifier les logs Windows** : Event Viewer → Applications and Services
+   Logs → filtrer par source `OneClickKVM` (seulement WARN/ERROR — pour
+   le détail complet, le fichier app.log est plus riche).
+4. **Reset complet de la config** : depuis Settings → "Réinitialiser toute
    la configuration", ou manuellement supprimer
-   `%APPDATA%\OneClickKVM\` puis relancer.
+   `%APPDATA%\OneClick\OneClickKVM\` puis relancer.
+
+> 💡 **Régression historique v0.1.2 (RPC_E_CHANGED_MODE)** : si tu vois
+> ce message dans le crash log, c'est probablement un MFT video qui init
+> COM sur le main thread (cf. CHANGELOG [0.1.2] et le contrat
+> `okvm_video::ensure_mf_init`). En version actuelle, un `debug_assert`
+> détecte cette classe de bug en dev. En release, le file logger trace
+> "boot: mf-boot-probe thread spawné" : si tu vois ce log mais l'app
+> crash quand même, c'est un autre bug — partage le log.
 
 ## Les pairs ne se découvrent pas sur le LAN
 
