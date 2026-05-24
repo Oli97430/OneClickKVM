@@ -7,6 +7,31 @@ versions sémantiques [SemVer](https://semver.org/lang/fr/).
 
 ## [Unreleased] — non publié sur GitHub Releases
 
+### Ajouté — V3.3.4 : runtime bitrate change
+
+`MfH264AsyncEncoder::set_bitrate(kbps)` permet d'ajuster le bitrate
+cible à la volée sans recréer l'encoder. Implémenté via
+`ICodecAPI::SetValue(CODECAPI_AVEncCommonMeanBitRate, VT_UI4(bps))`.
+Pris en compte au prochain GOP (~2 sec).
+
+**Use case** : ABR adaptatif aux conditions réseau. Si le receiver
+renvoie des stats de perte de paquets élevée, le caller peut baisser
+le bitrate pour réduire la pression.
+
+**Validation fonctionnelle** : test exercé montre +60% débit après
+`set_bitrate(800)` post-500kbps initial — NVENC répond bien au
+changement.
+
+### Ajouté — V3.3.3 : `drain()` propre via `METransformDrainComplete`
+
+`drain()` ne sleep plus 200ms hardcodé. Le caller bloque maintenant
+jusqu'à l'event MFT `METransformDrainComplete` réel (typiquement
+<10ms), via un nouveau `WorkerCmd::Drain{ack_tx}` + ack channel.
+Garantit que tous les NAL pending sont sortis avant le retour.
+
+Edge cases : worker mort → Err propagé, timeout 2s → warn + retourne
+les NAL collectés, drain concurrent → ack remplacé avec warn.
+
 ### Ajouté — V3.3.2 : `force_keyframe()` réel sur l'async encoder
 
 `MfH264AsyncEncoder::force_keyframe()` n'est plus un no-op stub. Le
