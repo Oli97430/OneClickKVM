@@ -195,6 +195,11 @@ enum WorkerCmd {
     /// Microsoft. Non destructif (pas de flush — les frames pending
     /// continuent leur cours, seul le prochain encode démarre un nouveau GOP).
     ForceKeyframe,
+    /// Drain : envoie `MFT_MESSAGE_COMMAND_DRAIN`, attend l'event
+    /// `METransformDrainComplete`, puis ack via `ack_tx`. Le caller
+    /// peut alors bloquer sur `ack_rx.recv()` pour avoir la garantie
+    /// que tous les NAL pending sont sortis avant de continuer.
+    Drain { ack_tx: mpsc::Sender<()> },
 }
 
 /// API publique : encoder H.264 async-mode (NVENC / AMF / QSV récents).
@@ -396,23 +401,38 @@ impl MfH264AsyncEncoder {
         let _ = self.cmd_tx.send(WorkerCmd::ForceKeyframe);
     }
 
-    /// Bloque jusqu'à ce que le worker ait drainé tous les NAL pending,
-    /// puis retourne le bitstream final.
+    /// Bloque jusqu'à ce que le worker ait drainé tous les NAL pending
+    /// (event `METransformDrainComplete` reçu), puis retourne le bitstream
+    /// final qui contient les derniers NAL accumulés.
+    ///
+    /// **Note** : après `drain()`, l'encoder est en état "end-of-stream"
+    /// au sens MFT. Pour reprendre l'encodage il faudrait re-init (pas
+    /// supporté actuellement — créer un nouveau `MfH264AsyncEncoder` à
+    /// la place).
     ///
     /// # Erreurs
-    /// Timeout (5 s) ou worker mort.
+    /// Worker mort, ou timeout 2s si le drain ne termine pas (rare —
+    /// MFT devrait drainer en <1s typiquement).
     pub fn drain(&mut self) -> Result<Vec<u8>> {
-        // TODO V3.3.1 step 2 : signaler au worker de faire
-        // ProcessMessage(MFT_MESSAGE_COMMAND_DRAIN) puis attendre l'event
-        // METransformDrainComplete. Pour l'instant on collecte juste ce
-        // qui reste dans output_rx pendant 200ms.
+        let (ack_tx, ack_rx) = mpsc::channel::<()>();
+        self.cmd_tx
+            .send(WorkerCmd::Drain { ack_tx })
+            .map_err(|_| Error::other("worker mort avant drain"))?;
+
+        // Bloque jusqu'à ack ou timeout 2s.
+        let drain_finished = ack_rx.recv_timeout(Duration::from_secs(2)).is_ok();
+        if !drain_finished {
+            tracing::warn!(
+                "drain timeout 2s — collecte ce qui est sorti et retourne (NAL pending peuvent \
+                 être perdus)"
+            );
+        }
+
+        // À ce stade tous les HaveOutput ont été pushés dans output_rx
+        // par le worker. On les collecte (non-bloquant).
         let mut bitstream = Vec::with_capacity(4096);
-        let deadline = std::time::Instant::now() + Duration::from_millis(200);
-        while std::time::Instant::now() < deadline {
-            match self.output_rx.recv_timeout(Duration::from_millis(50)) {
-                Ok(nal) => bitstream.extend_from_slice(&nal),
-                Err(_) => break,
-            }
+        while let Ok(nal) = self.output_rx.try_recv() {
+            bitstream.extend_from_slice(&nal);
         }
         Ok(bitstream)
     }
@@ -656,6 +676,9 @@ fn worker_loop(
     let mut pending_inputs: std::collections::VecDeque<InputFrame> =
         std::collections::VecDeque::with_capacity(MAX_PENDING_INPUTS);
     let mut dropped_total: u64 = 0;
+    // Optionnel : ack à envoyer quand le prochain METransformDrainComplete arrive.
+    // Set par WorkerCmd::Drain, consommé par MftEvent::DrainComplete.
+    let mut pending_drain_ack: Option<mpsc::Sender<()>> = None;
 
     // Poll alterné event_rx / input_rx via recv_timeout pour ne pas
     // bloquer indéfiniment dans l'un.
@@ -677,6 +700,10 @@ fn worker_loop(
                 }
                 MftEvent::DrainComplete => {
                     tracing::debug!("mf-async-worker: drain complete");
+                    // Signale au caller bloqué sur drain() que c'est fini.
+                    if let Some(ack) = pending_drain_ack.take() {
+                        let _ = ack.send(());
+                    }
                 }
             }
             // Re-arme le pump pour le prochain event. À FAIRE après chaque
@@ -688,9 +715,8 @@ fn worker_loop(
             }
         }
 
-        // 1bis. Pump les commandes worker (force_keyframe, etc.) en
-        //       non-bloquant. Appliquées immédiatement au transform via
-        //       ICodecAPI (si dispo).
+        // 1bis. Pump les commandes worker (force_keyframe, drain) en
+        //       non-bloquant.
         while let Ok(cmd) = cmd_rx.try_recv() {
             match cmd {
                 WorkerCmd::ForceKeyframe => {
@@ -714,6 +740,28 @@ fn worker_loop(
                                 error = %e,
                                 "mf-async-worker: force_keyframe SetValue échec"
                             ),
+                        }
+                    }
+                }
+                WorkerCmd::Drain { ack_tx } => {
+                    // Stash l'ack — sera envoyé quand METransformDrainComplete
+                    // arrive. Si un drain précédent est encore pending, on
+                    // remplace (le caller précédent a probablement timeout).
+                    if pending_drain_ack.is_some() {
+                        tracing::warn!(
+                            "mf-async-worker: nouveau drain reçu alors qu'un autre est pending — \
+                             remplace l'ack précédent (silent timeout pour ce caller)"
+                        );
+                    }
+                    pending_drain_ack = Some(ack_tx);
+                    // SAFETY: transform vivant tant que worker tourne.
+                    if let Err(e) =
+                        unsafe { transform.ProcessMessage(MFT_MESSAGE_COMMAND_DRAIN, 0) }
+                    {
+                        tracing::warn!(error = %e, "mf-async-worker: COMMAND_DRAIN échec");
+                        // Ack immédiat pour ne pas bloquer le caller.
+                        if let Some(ack) = pending_drain_ack.take() {
+                            let _ = ack.send(());
                         }
                     }
                 }
