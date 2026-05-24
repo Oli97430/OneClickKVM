@@ -33,3 +33,7 @@ desktop.ini
 # Build artifacts
 *.pdb
 *.exe.recipe
+
+# Claude Code harness internals (scheduled tasks, etc.)
+.claude/scheduled_tasks.lock
+.claude/*.local.json
