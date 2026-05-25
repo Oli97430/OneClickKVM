@@ -6,6 +6,8 @@
 [![Rust](https://img.shields.io/badge/rust-1.80%2B-orange?logo=rust)](https://rustup.rs)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-blue?logo=windows)](https://github.com/Oli97430/OneClickKVM/releases)
 
+🌐 **Landing page** : [oli97430.github.io/OneClickKVM](https://oli97430.github.io/OneClickKVM/)
+
 > Contrôle multi-PC chiffré pour Windows — partage clavier, souris, presse-papier,
 > fichiers, audio et écran entre plusieurs ordinateurs sur le réseau local.
 
