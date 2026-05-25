@@ -1,0 +1,1364 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OneClick KVM — two machines, one workflow, zero servers</title>
+    <meta
+      name="description"
+      content="Open-source KVM software for Windows. Share keyboard, mouse, clipboard, files, audio and screen between PCs over your LAN. AES-256-GCM encrypted. No accounts, no cloud, no telemetry."
+    />
+    <meta name="theme-color" content="#0a0a0b" />
+
+    <!-- OG tags for socials -->
+    <meta property="og:title" content="OneClick KVM" />
+    <meta
+      property="og:description"
+      content="Two machines. One workflow. Zero servers. Open-source LAN KVM with AES-256-GCM encryption."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://oli97430.github.io/OneClickKVM/" />
+
+    <!-- Fonts: distinctive mono + warm serif -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,700;0,800;1,400&family=Fraunces:ital,opsz,wght,SOFT@0,9..144,300;0,9..144,400;0,9..144,600;1,9..144,400&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      /* ─── DESIGN TOKENS ────────────────────────────────────────────── */
+      :root {
+        --bg: #0a0a0b;
+        --bg-elev: #131316;
+        --bg-card: #1a1a1e;
+        --line: #2a2a30;
+        --fg: #f5f0e3;
+        --fg-muted: #8d887b;
+        --fg-dim: #5a564d;
+        --acid: #c8ff00;
+        --rust: #ff5520;
+        --paper: #f5f0e3;
+
+        --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Consolas, monospace;
+        --font-serif: "Fraunces", "Times New Roman", Georgia, serif;
+
+        --max-w: 1280px;
+        --gutter: clamp(1.5rem, 4vw, 4rem);
+      }
+
+      /* ─── RESET ────────────────────────────────────────────────────── */
+      *,
+      *::before,
+      *::after {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--fg);
+        font-family: var(--font-mono);
+        font-size: 16px;
+        line-height: 1.5;
+        overflow-x: hidden;
+        cursor: crosshair;
+        position: relative;
+      }
+
+      /* Grain texture overlay everywhere */
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.92' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.04 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        pointer-events: none;
+        z-index: 1000;
+        opacity: 0.5;
+        mix-blend-mode: overlay;
+      }
+
+      ::selection {
+        background: var(--acid);
+        color: var(--bg);
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+        cursor: pointer;
+      }
+
+      button {
+        background: none;
+        border: none;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+      }
+
+      /* ─── SCROLLBAR ────────────────────────────────────────────────── */
+      ::-webkit-scrollbar {
+        width: 12px;
+      }
+      ::-webkit-scrollbar-track {
+        background: var(--bg);
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--line);
+        border: 3px solid var(--bg);
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: var(--acid);
+      }
+
+      /* ─── HEADER ───────────────────────────────────────────────────── */
+      header.nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        backdrop-filter: blur(20px);
+        background: rgba(10, 10, 11, 0.7);
+        border-bottom: 1px solid var(--line);
+      }
+
+      .nav-inner {
+        max-width: var(--max-w);
+        margin: 0 auto;
+        padding: 14px var(--gutter);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 13px;
+        font-weight: 500;
+      }
+
+      .nav-brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        letter-spacing: 0.02em;
+      }
+
+      .nav-brand .dot {
+        width: 10px;
+        height: 10px;
+        background: var(--acid);
+        animation: pulse 2.5s ease-in-out infinite;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 0.4;
+          transform: scale(0.8);
+        }
+      }
+
+      .nav-links {
+        display: flex;
+        gap: 32px;
+        font-size: 12px;
+        color: var(--fg-muted);
+      }
+      .nav-links a {
+        position: relative;
+        transition: color 0.2s;
+      }
+      .nav-links a:hover {
+        color: var(--acid);
+      }
+      .nav-links a::before {
+        content: attr(data-num);
+        color: var(--fg-dim);
+        margin-right: 6px;
+      }
+
+      @media (max-width: 720px) {
+        .nav-links {
+          display: none;
+        }
+      }
+
+      /* ─── HERO ─────────────────────────────────────────────────────── */
+      .hero {
+        min-height: 100vh;
+        padding: 120px var(--gutter) 60px;
+        max-width: var(--max-w);
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 60px;
+        align-items: center;
+        position: relative;
+      }
+
+      /* Scan-line subtle effect on hero only */
+      .hero::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: repeating-linear-gradient(
+          to bottom,
+          transparent 0,
+          transparent 3px,
+          rgba(255, 255, 255, 0.015) 3px,
+          rgba(255, 255, 255, 0.015) 4px
+        );
+        pointer-events: none;
+      }
+
+      .hero-meta {
+        font-size: 12px;
+        color: var(--fg-muted);
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        display: flex;
+        gap: 30px;
+        flex-wrap: wrap;
+        animation: fadeUp 0.6s 0.1s both;
+      }
+      .hero-meta span:first-child {
+        color: var(--acid);
+      }
+
+      h1.hero-title {
+        font-family: var(--font-mono);
+        font-weight: 700;
+        font-size: clamp(48px, 9vw, 140px);
+        line-height: 0.92;
+        letter-spacing: -0.04em;
+        margin-top: 24px;
+        max-width: 16ch;
+      }
+
+      h1.hero-title .word {
+        display: inline-block;
+        animation: fadeUp 0.8s both;
+      }
+      h1.hero-title .word:nth-child(1) {
+        animation-delay: 0.2s;
+      }
+      h1.hero-title .word:nth-child(2) {
+        animation-delay: 0.35s;
+      }
+      h1.hero-title .word:nth-child(3) {
+        animation-delay: 0.5s;
+      }
+
+      h1.hero-title em {
+        font-family: var(--font-serif);
+        font-style: italic;
+        font-weight: 400;
+        font-variation-settings: "SOFT" 100, "opsz" 144;
+        color: var(--acid);
+      }
+
+      .cursor-blink {
+        display: inline-block;
+        width: 0.5em;
+        height: 0.85em;
+        background: var(--acid);
+        margin-left: 0.1em;
+        vertical-align: -0.05em;
+        animation: blink 1.06s steps(2) infinite;
+      }
+
+      @keyframes blink {
+        0%,
+        50% {
+          opacity: 1;
+        }
+        51%,
+        100% {
+          opacity: 0;
+        }
+      }
+
+      @keyframes fadeUp {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .hero-sub {
+        font-family: var(--font-serif);
+        font-size: clamp(18px, 1.8vw, 24px);
+        line-height: 1.45;
+        max-width: 38ch;
+        color: var(--fg);
+        font-variation-settings: "SOFT" 80, "opsz" 30;
+        font-weight: 400;
+        animation: fadeUp 0.8s 0.7s both;
+      }
+
+      .hero-sub strike {
+        color: var(--fg-dim);
+        text-decoration-color: var(--rust);
+        text-decoration-thickness: 2px;
+        margin-right: 0.2em;
+      }
+      .hero-sub mark {
+        background: transparent;
+        color: var(--acid);
+        font-style: italic;
+      }
+
+      .hero-actions {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        animation: fadeUp 0.8s 0.9s both;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        padding: 16px 24px;
+        font-family: var(--font-mono);
+        font-weight: 500;
+        font-size: 13px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        border: 1px solid var(--line);
+        transition: all 0.18s ease-out;
+        background: transparent;
+        color: var(--fg);
+      }
+      .btn-primary {
+        background: var(--acid);
+        color: var(--bg);
+        border-color: var(--acid);
+      }
+      .btn:hover {
+        transform: translate(-2px, -2px);
+        box-shadow: 4px 4px 0 var(--acid);
+      }
+      .btn-primary:hover {
+        box-shadow: 4px 4px 0 var(--fg);
+      }
+      .btn .arrow {
+        transition: transform 0.18s;
+      }
+      .btn:hover .arrow {
+        transform: translateX(4px);
+      }
+
+      /* Schematic ASCII diagram */
+      .hero-schematic {
+        font-family: var(--font-mono);
+        font-size: clamp(8px, 1.2vw, 13px);
+        line-height: 1.15;
+        color: var(--fg-muted);
+        white-space: pre;
+        margin-top: 12px;
+        padding: 20px 0;
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+        overflow-x: auto;
+        animation: fadeUp 0.8s 1.1s both;
+      }
+      .hero-schematic .lit {
+        color: var(--acid);
+      }
+      .hero-schematic .warn {
+        color: var(--rust);
+      }
+
+      /* ─── MARQUEE ─────────────────────────────────────────────────── */
+      .marquee {
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+        overflow: hidden;
+        background: var(--bg);
+        padding: 14px 0;
+      }
+      .marquee-track {
+        display: flex;
+        gap: 60px;
+        animation: scroll 50s linear infinite;
+        white-space: nowrap;
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        color: var(--fg-muted);
+      }
+      .marquee-track span {
+        flex-shrink: 0;
+      }
+      .marquee-track .badge {
+        color: var(--acid);
+      }
+      .marquee-track .sep {
+        color: var(--fg-dim);
+      }
+      @keyframes scroll {
+        from {
+          transform: translateX(0);
+        }
+        to {
+          transform: translateX(-50%);
+        }
+      }
+
+      /* ─── SECTIONS ─────────────────────────────────────────────────── */
+      section {
+        padding: 100px var(--gutter);
+        max-width: var(--max-w);
+        margin: 0 auto;
+        position: relative;
+      }
+
+      .sec-label {
+        font-size: 11px;
+        color: var(--fg-dim);
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 28px;
+      }
+      .sec-label::before {
+        content: "";
+        width: 28px;
+        height: 1px;
+        background: var(--acid);
+      }
+      .sec-label .num {
+        color: var(--acid);
+        font-weight: 700;
+      }
+
+      h2.sec-title {
+        font-family: var(--font-mono);
+        font-weight: 700;
+        font-size: clamp(36px, 5vw, 64px);
+        line-height: 1;
+        letter-spacing: -0.03em;
+        max-width: 22ch;
+        margin-bottom: 60px;
+      }
+      h2.sec-title em {
+        font-family: var(--font-serif);
+        font-style: italic;
+        font-weight: 400;
+        font-variation-settings: "SOFT" 100, "opsz" 144;
+        color: var(--acid);
+      }
+
+      /* ─── §01 PILLARS ─────────────────────────────────────────────── */
+      .pillars {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 24px;
+      }
+      .pillar {
+        border: 1px solid var(--line);
+        padding: 32px;
+        background: var(--bg-card);
+        position: relative;
+        transition: border-color 0.2s;
+      }
+      .pillar:hover {
+        border-color: var(--acid);
+      }
+      .pillar:hover .pillar-num {
+        color: var(--acid);
+      }
+      .pillar-num {
+        font-size: 11px;
+        color: var(--fg-dim);
+        letter-spacing: 0.1em;
+        margin-bottom: 24px;
+        transition: color 0.2s;
+      }
+      .pillar h3 {
+        font-family: var(--font-mono);
+        font-weight: 700;
+        font-size: 24px;
+        margin-bottom: 16px;
+        line-height: 1.1;
+        letter-spacing: -0.02em;
+      }
+      .pillar p {
+        font-family: var(--font-serif);
+        font-size: 16px;
+        line-height: 1.55;
+        color: var(--fg-muted);
+        font-variation-settings: "SOFT" 50, "opsz" 14;
+      }
+
+      /* Asymmetric grid placement */
+      .pillar.km {
+        grid-column: span 6;
+        min-height: 240px;
+      }
+      .pillar.files {
+        grid-column: span 6;
+      }
+      .pillar.audio {
+        grid-column: span 4;
+      }
+      .pillar.video {
+        grid-column: span 8;
+        background: var(--bg-elev);
+      }
+      .pillar.clipboard {
+        grid-column: span 7;
+      }
+      .pillar.discovery {
+        grid-column: span 5;
+      }
+
+      @media (max-width: 800px) {
+        .pillar,
+        .pillar.km,
+        .pillar.files,
+        .pillar.audio,
+        .pillar.video,
+        .pillar.clipboard,
+        .pillar.discovery {
+          grid-column: span 12;
+        }
+      }
+
+      /* ─── §02 HOW ─────────────────────────────────────────────────── */
+      .how {
+        display: grid;
+        grid-template-columns: 1.1fr 1fr;
+        gap: 80px;
+        align-items: start;
+      }
+      @media (max-width: 900px) {
+        .how {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .how-text p {
+        font-family: var(--font-serif);
+        font-size: 18px;
+        line-height: 1.6;
+        margin-bottom: 20px;
+        color: var(--fg);
+        font-variation-settings: "SOFT" 60, "opsz" 18;
+      }
+      .how-text p:first-letter {
+        font-family: var(--font-mono);
+        font-weight: 700;
+        font-size: 1.5em;
+        color: var(--acid);
+        margin-right: 4px;
+      }
+
+      .how-diagram {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        line-height: 1.4;
+        white-space: pre;
+        color: var(--fg-muted);
+        background: var(--bg-card);
+        border: 1px solid var(--line);
+        padding: 24px;
+        overflow-x: auto;
+      }
+      .how-diagram .acid {
+        color: var(--acid);
+      }
+      .how-diagram .rust {
+        color: var(--rust);
+      }
+      .how-diagram .label {
+        color: var(--fg);
+        font-weight: 700;
+      }
+
+      /* ─── §03 CRYPTO ───────────────────────────────────────────────── */
+      .crypto-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 0;
+        border: 1px solid var(--line);
+      }
+      .crypto-item {
+        padding: 32px;
+        border-right: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+        background: var(--bg);
+        transition: background 0.2s;
+      }
+      .crypto-item:hover {
+        background: var(--bg-card);
+      }
+      .crypto-item:last-child {
+        border-right: none;
+      }
+      .crypto-item .role {
+        font-size: 11px;
+        color: var(--fg-dim);
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        margin-bottom: 14px;
+      }
+      .crypto-item .algo {
+        font-family: var(--font-mono);
+        font-weight: 700;
+        font-size: 22px;
+        letter-spacing: -0.02em;
+        margin-bottom: 10px;
+        color: var(--acid);
+      }
+      .crypto-item .note {
+        font-family: var(--font-serif);
+        font-size: 14px;
+        color: var(--fg-muted);
+        line-height: 1.5;
+        font-style: italic;
+      }
+
+      /* ─── §04 DOWNLOAD ─────────────────────────────────────────────── */
+      .download-card {
+        border: 1px solid var(--line);
+        background: var(--bg-card);
+        padding: 0;
+        display: grid;
+        grid-template-columns: 1fr;
+      }
+      .dl-head {
+        padding: 32px 40px 28px;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+      .dl-head .ver {
+        font-size: 32px;
+        font-weight: 700;
+        letter-spacing: -0.03em;
+      }
+      .dl-head .ver em {
+        font-family: var(--font-serif);
+        font-style: italic;
+        font-weight: 400;
+        color: var(--acid);
+        font-variation-settings: "SOFT" 100, "opsz" 144;
+      }
+      .dl-head .meta {
+        font-size: 11px;
+        color: var(--fg-muted);
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+      .dl-head .meta .acid {
+        color: var(--acid);
+      }
+
+      .dl-body {
+        padding: 32px 40px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 32px;
+      }
+      @media (max-width: 720px) {
+        .dl-body {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .dl-section h4 {
+        font-size: 11px;
+        color: var(--fg-dim);
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        margin-bottom: 16px;
+        font-weight: 700;
+      }
+
+      .sha-display {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        line-height: 1.4;
+        word-break: break-all;
+        background: var(--bg);
+        padding: 14px;
+        border: 1px dashed var(--line);
+        color: var(--fg-muted);
+        position: relative;
+      }
+      .sha-display .copy {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        background: var(--bg-card);
+        border: 1px solid var(--line);
+        color: var(--fg-muted);
+        padding: 3px 8px;
+        font-size: 10px;
+        cursor: pointer;
+        transition: all 0.15s;
+        letter-spacing: 0.08em;
+      }
+      .sha-display .copy:hover {
+        color: var(--acid);
+        border-color: var(--acid);
+      }
+      .sha-display .copy.copied {
+        background: var(--acid);
+        color: var(--bg);
+        border-color: var(--acid);
+      }
+
+      .verify-snippet {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        line-height: 1.5;
+        background: var(--bg);
+        padding: 14px;
+        border: 1px dashed var(--line);
+        color: var(--fg-muted);
+        overflow-x: auto;
+        white-space: pre;
+      }
+      .verify-snippet .acid {
+        color: var(--acid);
+      }
+      .verify-snippet .comment {
+        color: var(--fg-dim);
+        font-style: italic;
+      }
+
+      .dl-cta {
+        padding: 24px 40px;
+        background: var(--acid);
+        color: var(--bg);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        font-size: 14px;
+        transition: background 0.18s;
+      }
+      .dl-cta:hover {
+        background: var(--fg);
+      }
+      .dl-cta .right {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      /* ─── §05 TRUST ────────────────────────────────────────────────── */
+      .trust {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0;
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+      }
+      .trust-item {
+        padding: 40px 32px;
+        text-align: left;
+        border-right: 1px solid var(--line);
+      }
+      .trust-item:last-child {
+        border-right: none;
+      }
+      .trust-item .num {
+        font-family: var(--font-mono);
+        font-weight: 800;
+        font-size: clamp(48px, 6vw, 88px);
+        line-height: 0.85;
+        letter-spacing: -0.04em;
+        color: var(--acid);
+        font-feature-settings: "tnum" on;
+      }
+      .trust-item .num small {
+        font-size: 0.4em;
+        color: var(--fg-muted);
+        margin-left: 4px;
+        font-weight: 400;
+      }
+      .trust-item .label {
+        font-family: var(--font-serif);
+        font-style: italic;
+        font-size: 16px;
+        margin-top: 14px;
+        color: var(--fg);
+        font-variation-settings: "SOFT" 80, "opsz" 14;
+      }
+
+      @media (max-width: 720px) {
+        .trust {
+          grid-template-columns: 1fr;
+        }
+        .trust-item {
+          border-right: none;
+          border-bottom: 1px solid var(--line);
+        }
+        .trust-item:last-child {
+          border-bottom: none;
+        }
+      }
+
+      /* ─── FOOTER ───────────────────────────────────────────────────── */
+      footer {
+        border-top: 1px solid var(--line);
+        padding: 60px var(--gutter) 40px;
+        margin-top: 60px;
+      }
+      .footer-inner {
+        max-width: var(--max-w);
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: 2fr 1fr 1fr 1fr;
+        gap: 40px;
+      }
+      @media (max-width: 720px) {
+        .footer-inner {
+          grid-template-columns: 1fr;
+        }
+      }
+      .footer-brand h3 {
+        font-family: var(--font-mono);
+        font-weight: 800;
+        font-size: 24px;
+        margin-bottom: 12px;
+        letter-spacing: -0.02em;
+      }
+      .footer-brand p {
+        font-family: var(--font-serif);
+        font-style: italic;
+        font-size: 14px;
+        color: var(--fg-muted);
+        max-width: 32ch;
+        font-variation-settings: "SOFT" 80;
+      }
+      .footer-col h4 {
+        font-size: 11px;
+        color: var(--fg-dim);
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        margin-bottom: 16px;
+        font-weight: 700;
+      }
+      .footer-col ul {
+        list-style: none;
+      }
+      .footer-col li {
+        margin-bottom: 8px;
+        font-size: 13px;
+      }
+      .footer-col a {
+        color: var(--fg-muted);
+        transition: color 0.15s;
+      }
+      .footer-col a:hover {
+        color: var(--acid);
+      }
+
+      .footer-bottom {
+        max-width: var(--max-w);
+        margin: 40px auto 0;
+        padding-top: 24px;
+        border-top: 1px solid var(--line);
+        display: flex;
+        justify-content: space-between;
+        font-size: 11px;
+        color: var(--fg-dim);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+      .footer-bottom .acid {
+        color: var(--acid);
+      }
+    </style>
+  </head>
+
+  <body>
+    <header class="nav">
+      <div class="nav-inner">
+        <div class="nav-brand">
+          <span class="dot"></span>
+          <span>OneClick KVM</span>
+          <span style="color: var(--fg-dim); font-size: 11px">v0.1.4</span>
+        </div>
+        <nav class="nav-links">
+          <a data-num="01" href="#what">what</a>
+          <a data-num="02" href="#how">how</a>
+          <a data-num="03" href="#crypto">crypto</a>
+          <a data-num="04" href="#download">download</a>
+          <a data-num="05" href="https://github.com/Oli97430/OneClickKVM" target="_blank" rel="noopener">source</a>
+        </nav>
+      </div>
+    </header>
+
+    <!-- ─── HERO ─────────────────────────────────────────────────── -->
+    <section class="hero">
+      <div>
+        <div class="hero-meta">
+          <span>● ONLINE</span>
+          <span>OPEN-SOURCE</span>
+          <span>WINDOWS 10/11 · X64</span>
+          <span>MIT/APACHE-2.0</span>
+        </div>
+
+        <h1 class="hero-title">
+          <span class="word">Two&nbsp;machines.</span>
+          <span class="word">One&nbsp;<em>workflow</em>.</span>
+          <span class="word">Zero&nbsp;servers.<span class="cursor-blink"></span></span>
+        </h1>
+
+        <p class="hero-sub" style="margin-top: 40px">
+          An open-source <mark>KVM tool</mark> for Windows. Share keyboard, mouse,
+          clipboard, files, audio and screen between PCs over your LAN.
+          <strike>Cloud.</strike> <strike>Accounts.</strike> <strike>Telemetry.</strike>
+          Just AES-256-GCM and your wires.
+        </p>
+
+        <div class="hero-actions" style="margin-top: 36px">
+          <a href="#download" class="btn btn-primary">
+            <span>Download v0.1.4</span>
+            <span class="arrow">→</span>
+          </a>
+          <a
+            href="https://github.com/Oli97430/OneClickKVM"
+            target="_blank"
+            rel="noopener"
+            class="btn"
+          >
+            <span>github.com/Oli97430</span>
+            <span class="arrow">↗</span>
+          </a>
+        </div>
+
+        <pre class="hero-schematic" aria-hidden="true">
+  ┌──────────────────┐        <span class="lit">AES-256-GCM</span>        ┌──────────────────┐
+  │   <span class="lit">[ALICE-PC]</span>     │ ◄────────────────────► │   <span class="lit">[BOB-PC]</span>       │
+  │                  │     <span class="lit">X25519 ECDH</span>        │                  │
+  │  ░░  KEYBOARD    │      <span class="lit">Ed25519 sig</span>        │   KEYBOARD  ░░  │
+  │  ░░  MOUSE       │      <span class="lit">BLAKE3 file</span>        │   MOUSE     ░░  │
+  │  ░░  CLIPBOARD   │     <span class="lit">Opus / NVENC</span>        │   CLIPBOARD ░░  │
+  │  ░░  FILES       │      ────────────         │   FILES     ░░  │
+  │  ░░  AUDIO       │     <span class="warn">Reed-Solomon</span>        │   AUDIO     ░░  │
+  │  ░░  SCREEN      │       <span class="warn">FEC k=4 m=2</span>      │   SCREEN    ░░  │
+  └──────────────────┘                            └──────────────────┘
+         │                                                  │
+         └────────────────── <span class="lit">LAN ONLY</span> ────────────────────┘
+                       no cloud · no rent · no logs</pre>
+      </div>
+    </section>
+
+    <!-- ─── MARQUEE BAR ──────────────────────────────────────────── -->
+    <div class="marquee" aria-hidden="true">
+      <div class="marquee-track">
+        <span class="badge">AES-256-GCM</span><span class="sep">·</span>
+        <span>X25519 ECDH</span><span class="sep">·</span>
+        <span class="badge">Ed25519</span><span class="sep">·</span>
+        <span>BLAKE3</span><span class="sep">·</span>
+        <span class="badge">DPAPI</span><span class="sep">·</span>
+        <span>NVENC H.264</span><span class="sep">·</span>
+        <span class="badge">Opus 64kbps</span><span class="sep">·</span>
+        <span>WASAPI loopback</span><span class="sep">·</span>
+        <span class="badge">UDP + Reed-Solomon FEC</span><span class="sep">·</span>
+        <span>mDNS Bonjour</span><span class="sep">·</span>
+        <span class="badge">Win32 SendInput</span><span class="sep">·</span>
+        <span>Tauri 2 + Svelte 5</span><span class="sep">·</span>
+        <span class="badge">Rust</span><span class="sep">·</span>
+        <!-- duplicate for seamless loop -->
+        <span class="badge">AES-256-GCM</span><span class="sep">·</span>
+        <span>X25519 ECDH</span><span class="sep">·</span>
+        <span class="badge">Ed25519</span><span class="sep">·</span>
+        <span>BLAKE3</span><span class="sep">·</span>
+        <span class="badge">DPAPI</span><span class="sep">·</span>
+        <span>NVENC H.264</span><span class="sep">·</span>
+        <span class="badge">Opus 64kbps</span><span class="sep">·</span>
+        <span>WASAPI loopback</span><span class="sep">·</span>
+        <span class="badge">UDP + Reed-Solomon FEC</span><span class="sep">·</span>
+        <span>mDNS Bonjour</span><span class="sep">·</span>
+        <span class="badge">Win32 SendInput</span><span class="sep">·</span>
+        <span>Tauri 2 + Svelte 5</span><span class="sep">·</span>
+        <span class="badge">Rust</span><span class="sep">·</span>
+      </div>
+    </div>
+
+    <!-- ─── §01 WHAT ─────────────────────────────────────────────── -->
+    <section id="what">
+      <div class="sec-label"><span class="num">§01</span> What it does</div>
+      <h2 class="sec-title">
+        Six things you used to need <em>six different tools</em> for.
+      </h2>
+
+      <div class="pillars">
+        <div class="pillar km">
+          <div class="pillar-num">01 / SIX</div>
+          <h3>KEYBOARD + MOUSE</h3>
+          <p>
+            Move your cursor off the edge of one screen and onto another PC. Native
+            <code style="color: var(--acid)">SendInput</code> injection, full multi-monitor
+            support, hotkeys to jump directly between hosts.
+          </p>
+        </div>
+
+        <div class="pillar files">
+          <div class="pillar-num">02 / SIX</div>
+          <h3>FILES + DRAG-DROP</h3>
+          <p>
+            Drop any file on the window and it lands in
+            <code style="color: var(--acid)">Documents/OneClickKVM/Inbox/</code> on the other PC.
+            BLAKE3 verified. Multi-threaded. Resumable.
+          </p>
+        </div>
+
+        <div class="pillar audio">
+          <div class="pillar-num">03</div>
+          <h3>AUDIO</h3>
+          <p>
+            WASAPI loopback → Opus 64 kbps → UDP with Reed-Solomon FEC.
+            Hear your gaming PC's audio on your work setup.
+          </p>
+        </div>
+
+        <div class="pillar video">
+          <div class="pillar-num">04 / SIX</div>
+          <h3>SCREEN SHARING</h3>
+          <p>
+            Windows Graphics Capture API into hardware H.264 — NVENC on NVIDIA, AMF on AMD,
+            QuickSync on Intel. Sub-100ms LAN latency. Pick which monitor.
+          </p>
+        </div>
+
+        <div class="pillar clipboard">
+          <div class="pillar-num">05 / SIX</div>
+          <h3>CLIPBOARD</h3>
+          <p>
+            Bidirectional sync — text, RTF, HTML, PNG images, file lists. 10 Hz poll,
+            multi-format aware. Copy on one PC, paste on the other.
+          </p>
+        </div>
+
+        <div class="pillar discovery">
+          <div class="pillar-num">06</div>
+          <h3>DISCOVERY</h3>
+          <p>
+            mDNS + UDP broadcast fallback. PCs find each other on the LAN
+            without configuration.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── §02 HOW ──────────────────────────────────────────────── -->
+    <section id="how">
+      <div class="sec-label"><span class="num">§02</span> How it works</div>
+      <h2 class="sec-title">
+        Peer-to-peer. <em>End-to-end.</em> Never leaves your LAN.
+      </h2>
+
+      <div class="how">
+        <div class="how-text">
+          <p>
+            Every install generates a long-term <strong>Ed25519</strong> identity, sealed at
+            rest by Windows DPAPI. When two installs discover each other on the LAN, they
+            run an <strong>X25519 ECDH</strong> handshake (Perfect Forward Secrecy) and
+            negotiate session keys for both TCP control and UDP media.
+          </p>
+          <p>
+            The first pairing requires a <strong>6-digit PIN</strong> displayed on the
+            target machine — five wrong attempts and pairing mode shuts down automatically.
+            After that, the pair is permanent until you revoke it.
+          </p>
+          <p>
+            Input events, files and clipboard travel on the TCP channel with
+            <strong>AES-256-GCM</strong>. Real-time audio and screen frames go over UDP with
+            <strong>Reed-Solomon FEC</strong> for resilience against packet loss. No central
+            server. No relay. No telemetry. No accounts.
+          </p>
+        </div>
+
+        <pre class="how-diagram" aria-hidden="true"><span class="label">┌─── HANDSHAKE FLOW ───────────────────┐</span>
+
+  <span class="label">[A]</span>  ──── <span class="acid">ClientHello</span> ────────►  <span class="label">[B]</span>
+        nonce, X25519 pub
+
+  <span class="label">[A]</span>  ◄──── <span class="acid">ServerHello</span> ───────  <span class="label">[B]</span>
+        + Ed25519 signature
+        + UDP port advertise
+
+  <span class="label">[A]</span>  ──── <span class="acid">Finished</span> ───────────►  <span class="label">[B]</span>
+        AEAD tag over transcript
+
+   ▼                                  ▼
+  <span class="acid">DERIVE SESSION KEYS</span>  ─────────────►
+   ▼                                  ▼
+  TCP epoch=0  /  UDP epoch=1
+  (separate AEAD nonce spaces)
+
+  <span class="rust">─── PAIRING (1st time only) ─────────</span>
+  PIN: <span class="acid">123456</span>   TTL 60s
+  5 wrong attempts  →  mode disabled
+
+  <span class="label">└──────────────────────────────────────┘</span></pre>
+      </div>
+    </section>
+
+    <!-- ─── §03 CRYPTO ───────────────────────────────────────────── -->
+    <section id="crypto">
+      <div class="sec-label"><span class="num">§03</span> Cryptographic primitives</div>
+      <h2 class="sec-title">
+        Every byte on the wire <em>has a reason</em>.
+      </h2>
+
+      <div class="crypto-grid">
+        <div class="crypto-item">
+          <div class="role">Long-term identity</div>
+          <div class="algo">Ed25519</div>
+          <div class="note">Signs the handshake transcript. Stored sealed by Windows DPAPI.</div>
+        </div>
+        <div class="crypto-item">
+          <div class="role">Key exchange</div>
+          <div class="algo">X25519 ECDH</div>
+          <div class="note">Fresh keys per session — Perfect Forward Secrecy.</div>
+        </div>
+        <div class="crypto-item">
+          <div class="role">Transport AEAD</div>
+          <div class="algo">AES-256-GCM</div>
+          <div class="note">Nonce = epoch‖counter. Anti-replay bitmap on UDP.</div>
+        </div>
+        <div class="crypto-item">
+          <div class="role">File integrity</div>
+          <div class="algo">BLAKE3</div>
+          <div class="note">Every received file verified before it lands in the inbox.</div>
+        </div>
+        <div class="crypto-item">
+          <div class="role">Media loss recovery</div>
+          <div class="algo">Reed-Solomon</div>
+          <div class="note">k=4 m=2 over GF(2⁸). Recover from 2 lost packets per group.</div>
+        </div>
+        <div class="crypto-item">
+          <div class="role">Identity at rest</div>
+          <div class="algo">DPAPI</div>
+          <div class="note">Windows seals the Ed25519 seed to the user session.</div>
+        </div>
+        <div class="crypto-item">
+          <div class="role">Pairing rate limit</div>
+          <div class="algo">5 strikes</div>
+          <div class="note">Mode disables after 5 wrong PIN guesses. No timing leaks.</div>
+        </div>
+        <div class="crypto-item">
+          <div class="role">Memory hygiene</div>
+          <div class="algo">Zeroize</div>
+          <div class="note">PINs and ephemeral secrets zeroed on drop.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── TRUST NUMBERS ────────────────────────────────────────── -->
+    <section style="padding-top: 40px; padding-bottom: 40px">
+      <div class="trust">
+        <div class="trust-item">
+          <div class="num">100<small>%</small></div>
+          <div class="label">Local network. No cloud. No relay. No backdoor.</div>
+        </div>
+        <div class="trust-item">
+          <div class="num">0<small>kb</small></div>
+          <div class="label">Telemetry sent. The app talks to your peers and nothing else.</div>
+        </div>
+        <div class="trust-item">
+          <div class="num">4.4<small>MB</small></div>
+          <div class="label">Installer size. Single-binary, per-user install, no admin.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── §04 DOWNLOAD ─────────────────────────────────────────── -->
+    <section id="download">
+      <div class="sec-label"><span class="num">§04</span> Download</div>
+      <h2 class="sec-title">
+        4.4 MB. One installer. <em>No registration.</em>
+      </h2>
+
+      <div class="download-card">
+        <div class="dl-head">
+          <div class="ver">v0.1.<em>4</em></div>
+          <div class="meta">
+            WINDOWS · X64 · <span class="acid">2026-05-24</span> · NSIS PER-USER
+          </div>
+        </div>
+
+        <div class="dl-body">
+          <div class="dl-section">
+            <h4>SHA-256 verification</h4>
+            <div class="sha-display">
+              <code id="sha"
+                >ecf84900631e5471503b227775508daa1444698f10c32974161153a189d931d8</code
+              >
+              <button class="copy" id="copy-sha" data-target="sha">COPY</button>
+            </div>
+          </div>
+
+          <div class="dl-section">
+            <h4>Verify before installing</h4>
+            <pre class="verify-snippet"><span class="comment"># PowerShell</span>
+<span class="acid">Get-FileHash</span> -Algorithm SHA256 `
+  "OneClick KVM_0.1.4_x64-setup.exe"</pre>
+          </div>
+        </div>
+
+        <a
+          class="dl-cta"
+          href="https://github.com/Oli97430/OneClickKVM/releases/download/v0.1.4/OneClick.KVM_0.1.4_x64-setup.exe"
+        >
+          <span>↓ DOWNLOAD &nbsp; ONECLICK&nbsp;KVM&nbsp;0.1.4 &nbsp; SETUP.EXE</span>
+          <span class="right">
+            <span>4.4&nbsp;MB</span>
+            <span>→</span>
+          </span>
+        </a>
+      </div>
+
+      <p
+        style="
+          margin-top: 24px;
+          font-family: var(--font-serif);
+          font-style: italic;
+          color: var(--fg-muted);
+          font-size: 14px;
+          max-width: 60ch;
+          font-variation-settings: 'SOFT' 80;
+        "
+      >
+        ⚠ Windows SmartScreen will warn at first launch — this build is not
+        Authenticode-signed (no certificate planned). Verify the SHA-256 above and
+        click <strong>More info → Run anyway</strong>.
+      </p>
+    </section>
+
+    <!-- ─── FOOTER ───────────────────────────────────────────────── -->
+    <footer>
+      <div class="footer-inner">
+        <div class="footer-brand">
+          <h3>OneClick KVM</h3>
+          <p>
+            Two machines. One workflow. Zero servers. Open-source LAN KVM with
+            end-to-end encryption.
+          </p>
+        </div>
+        <div class="footer-col">
+          <h4>Project</h4>
+          <ul>
+            <li><a href="https://github.com/Oli97430/OneClickKVM" target="_blank" rel="noopener">Source</a></li>
+            <li><a href="https://github.com/Oli97430/OneClickKVM/releases" target="_blank" rel="noopener">Releases</a></li>
+            <li><a href="https://github.com/Oli97430/OneClickKVM/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a></li>
+            <li><a href="https://github.com/Oli97430/OneClickKVM/issues" target="_blank" rel="noopener">Issues</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Docs</h4>
+          <ul>
+            <li><a href="https://github.com/Oli97430/OneClickKVM/blob/main/docs/ARCHITECTURE.md" target="_blank" rel="noopener">Architecture</a></li>
+            <li><a href="https://github.com/Oli97430/OneClickKVM/blob/main/docs/PROTOCOL.md" target="_blank" rel="noopener">Protocol</a></li>
+            <li><a href="https://github.com/Oli97430/OneClickKVM/blob/main/docs/SECURITY.md" target="_blank" rel="noopener">Security</a></li>
+            <li><a href="https://github.com/Oli97430/OneClickKVM/blob/main/docs/TROUBLESHOOTING.md" target="_blank" rel="noopener">Troubleshooting</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>License</h4>
+          <ul>
+            <li><a href="https://github.com/Oli97430/OneClickKVM/blob/main/LICENSE-MIT" target="_blank" rel="noopener">MIT</a></li>
+            <li><a href="https://github.com/Oli97430/OneClickKVM/blob/main/LICENSE-APACHE" target="_blank" rel="noopener">Apache-2.0</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <span>BUILT WITH <span class="acid">RUST</span> · <span class="acid">TAURI&nbsp;2</span> · <span class="acid">SVELTE&nbsp;5</span></span>
+        <span>© 2026 OneClick KVM contributors · MIT/Apache-2.0</span>
+      </div>
+    </footer>
+
+    <script>
+      // Copy SHA button
+      const copyBtn = document.getElementById("copy-sha");
+      const sha = document.getElementById("sha");
+      copyBtn?.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(sha.textContent.trim());
+          copyBtn.textContent = "COPIED";
+          copyBtn.classList.add("copied");
+          setTimeout(() => {
+            copyBtn.textContent = "COPY";
+            copyBtn.classList.remove("copied");
+          }, 1500);
+        } catch {
+          copyBtn.textContent = "ERR";
+        }
+      });
+
+      // Smooth scroll spy — highlight current section in nav
+      const navLinks = document.querySelectorAll(".nav-links a");
+      const sections = ["what", "how", "crypto", "download"]
+        .map((id) => document.getElementById(id))
+        .filter(Boolean);
+
+      const setActive = (id) => {
+        navLinks.forEach((a) => {
+          const href = a.getAttribute("href");
+          if (href === "#" + id) a.style.color = "var(--acid)";
+          else a.style.color = "";
+        });
+      };
+
+      const io = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((e) => {
+            if (e.isIntersecting) setActive(e.target.id);
+          });
+        },
+        { rootMargin: "-40% 0px -55% 0px" }
+      );
+      sections.forEach((s) => io.observe(s));
+
+      // Subtle parallax on the schematic at scroll
+      const schematic = document.querySelector(".hero-schematic");
+      if (schematic && window.matchMedia("(prefers-reduced-motion: no-preference)").matches) {
+        let ticking = false;
+        window.addEventListener("scroll", () => {
+          if (ticking) return;
+          ticking = true;
+          requestAnimationFrame(() => {
+            const y = window.scrollY;
+            if (y < 800) schematic.style.transform = `translateY(${y * 0.08}px)`;
+            ticking = false;
+          });
+        });
+      }
+    </script>
+  </body>
+</html>
